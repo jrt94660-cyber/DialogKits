@@ -235,12 +235,23 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             ));
         }
 
-        // Add this once per menu build, regardless of how many kits are assigned.
-        buttons.add(button(
-                color(getConfig().getString("ui.add-kit-button", "&aAdd Kit")),
-                "/dialogkitsadmin edit",
-                color("&7Open the admin editor to add a kit and choose its position.")
-        ));
+        // Only the LuckPerms owner rank sees the admin entry point.
+        if (isOwnerRank(player)) {
+            buttons.add(button(
+                    color(getConfig().getString("ui.add-kit-button", "&aAdd Kit")),
+                    "/dialogkitsadmin edit",
+                    color("&7Open the admin editor to add a kit and choose its position.")
+            ));
+        }
+
+        if (buttons.isEmpty()) {
+            showNotice(
+                    player,
+                    getConfig().getString("ui.title", "&8Player Kits"),
+                    getConfig().getString("ui.no-kits-for-player", "&7No kits are available yet.")
+            );
+            return;
+        }
 
         String description = kits.isEmpty()
                 ? getConfig().getString("ui.empty-description", "&7No kits have been added yet. Click &aAdd Kit &7to set up the kit list.")
@@ -671,6 +682,38 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         return value instanceof Boolean bool && bool;
     }
 
+    /**
+     * Checks the player's LuckPerms primary group against the configured owner
+     * group. LuckPerms is accessed reflectively so it remains an optional plugin.
+     * If LuckPerms is absent, the player data is not loaded, or the API fails,
+     * access is denied by default.
+     */
+    private boolean isOwnerRank(Player player) {
+        Plugin luckPermsPlugin = Bukkit.getPluginManager().getPlugin("LuckPerms");
+        if (luckPermsPlugin == null || !luckPermsPlugin.isEnabled()) {
+            return false;
+        }
+
+        try {
+            Class<?> providerClass = Class.forName(
+                    "net.luckperms.api.LuckPermsProvider",
+                    true,
+                    luckPermsPlugin.getClass().getClassLoader()
+            );
+            Object luckPerms = providerClass.getMethod("get").invoke(null);
+            Object userManager = invoke(luckPerms, "getUserManager");
+            Object user = invokeWithArgument(userManager, "getUser", player.getUniqueId());
+            String primaryGroup = stringValue(invoke(user, "getPrimaryGroup"));
+            String ownerGroup = getConfig().getString("admin.owner-group", "owner");
+            return primaryGroup != null
+                    && ownerGroup != null
+                    && primaryGroup.equalsIgnoreCase(ownerGroup.trim());
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            getLogger().fine("Could not check LuckPerms owner group for " + player.getName() + ": " + exception.getMessage());
+            return false;
+        }
+    }
+
     private List<?> getManuallyAssignedKits(List<?> kits) {
         if (kits == null || kits.isEmpty()) {
             return List.of();
@@ -712,8 +755,10 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             sender.sendMessage("This command opens a native dialog and must be used in-game.");
             return true;
         }
-        if (!player.hasPermission("dialogkits.admin")) {
-            player.sendMessage(color(getConfig().getString("messages.no-permission", "&cYou do not have permission to do that.")));
+        // Rank membership is checked from LuckPerms each time, not merely
+        // by OP status or a permission node that could be granted to others.
+        if (!isOwnerRank(player)) {
+            player.sendMessage(color(getConfig().getString("messages.no-permission", "&cYou must have the LuckPerms owner rank to edit kit positions.")));
             return true;
         }
 
