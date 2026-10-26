@@ -735,34 +735,38 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         int originalIndex = 0;
         for (Object kit : kits) {
             String kitName = stringValue(invoke(kit, "getName"));
+            boolean permissionRequired = Boolean.TRUE.equals(invoke(kit, "isPermissionRequired"));
             Integer weight = kitName == null
                     ? null
                     : weightsByGroupName.get(normalizeRankName(kitName));
 
-            if (weight == null && kitName != null) {
+            if (weight == null && kitName != null && permissionRequired) {
                 String customPermission = stringValue(invoke(kit, "getCustomPermission"));
-                boolean permissionRequired = Boolean.TRUE.equals(invoke(kit, "isPermissionRequired"));
                 String requiredPermission = customPermission != null && !customPermission.isBlank()
                         ? customPermission
-                        : permissionRequired ? "playerkits.kit." + kitName : null;
+                        : "playerkits.kit." + kitName;
 
-                if (requiredPermission != null) {
-                    String expected = requiredPermission.toLowerCase(Locale.ROOT);
-                    for (Map.Entry<String, Integer> entry : weightsByPermission.entrySet()) {
-                        if (permissionNodeMatches(expected, entry.getKey())
-                                && (weight == null || entry.getValue() < weight)) {
-                            weight = entry.getValue();
-                        }
+                String expected = requiredPermission.toLowerCase(Locale.ROOT);
+                for (Map.Entry<String, Integer> entry : weightsByPermission.entrySet()) {
+                    if (permissionNodeMatches(expected, entry.getKey())
+                            && (weight == null || entry.getValue() < weight)) {
+                        weight = entry.getValue();
                     }
                 }
             }
 
-            ordered.add(new KitOrderEntry(kit, weight, originalIndex++));
+            ordered.add(new KitOrderEntry(kit, weight, permissionRequired, originalIndex++));
         }
 
         boolean unmatchedLast = getConfig().getBoolean("rank-order.unmatched-kits-last", true);
         Comparator<KitOrderEntry> comparator = Comparator
-                .comparingInt((KitOrderEntry entry) -> entry.weight() == null
+                // Kits without a permission requirement always come first.
+                .comparingInt((KitOrderEntry entry) -> entry.permissionRequired() ? 1 : 0)
+                // Keep non-permission kits together in their original order; sort
+                // permission-based kits by ascending LuckPerms group weight.
+                .thenComparingInt(entry -> !entry.permissionRequired()
+                        ? 0
+                        : entry.weight() == null
                         ? (unmatchedLast ? Integer.MAX_VALUE : Integer.MIN_VALUE)
                         : entry.weight())
                 .thenComparingInt(KitOrderEntry::originalIndex);
@@ -815,7 +819,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
     }
 
-    private record KitOrderEntry(Object kit, Integer weight, int originalIndex) {
+    private record KitOrderEntry(Object kit, Integer weight, boolean permissionRequired, int originalIndex) {
     }
 
     private Object findKit(String kitId) {
