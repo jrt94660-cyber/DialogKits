@@ -230,17 +230,8 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return;
         }
 
-        List<DialogBody> body = new ArrayList<>();
-        body.add(DialogBody.item(
-                new ItemStack(Material.SPYGLASS),
-                DialogBody.plainMessage(color(getConfig().getString("ui.preview-icon-description", "&7Preview kits with the spyglass action.")), 240),
-                true,
-                true,
-                28,
-                28
-        ));
-        body.add(DialogBody.plainMessage(
-                color(getConfig().getString("ui.description", "&7Choose a kit action. Ready is green; claimed kits are red.")),
+        List<DialogBody> body = List.of(DialogBody.plainMessage(
+                color(getConfig().getString("ui.description", "&7Choose an action for each kit. Ready is green, Claimed is yellow, Locked is red.")),
                 340
         ));
 
