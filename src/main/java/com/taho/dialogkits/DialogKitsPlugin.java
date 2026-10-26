@@ -17,6 +17,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.serialization.ConfigurationSerialization;
@@ -48,7 +49,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-public final class DialogKitsPlugin extends JavaPlugin implements Listener, CommandExecutor {
+public final class DialogKitsPlugin extends JavaPlugin implements Listener, CommandExecutor, TabCompleter {
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
     private final Map<String, KitDefinition> kits = new LinkedHashMap<>();
 
@@ -103,7 +104,10 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
     private void registerCommand(String name) {
         PluginCommand command = getCommand(name);
-        if (command != null) command.setExecutor(this);
+        if (command != null) {
+            command.setExecutor(this);
+            command.setTabCompleter(this);
+        }
     }
 
     @Override
@@ -121,6 +125,70 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return true;
         }
         return handleKitCommand(sender, args);
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        String commandName = command.getName().toLowerCase(Locale.ROOT);
+        boolean owner = sender instanceof Player player && isOwnerRank(player);
+
+        if (commandName.equals("dialogkitsadmin")) {
+            if (args.length == 1) {
+                List<String> options = owner
+                        ? List.of("edit", "help", "choose", "assign")
+                        : List.of();
+                return matching(options, args[0]);
+            }
+            return List.of();
+        }
+
+        if (args.length == 1) {
+            List<String> options = new ArrayList<>(List.of("help", "open", "claim", "preview", "reload"));
+            if (owner) {
+                options.addAll(List.of("create", "edit", "replace", "delete", "give", "verify"));
+            }
+            // The kit name used in lore (for example /kit FlipplLow) is also
+            // suggested, so direct kit claims are discoverable without guessing.
+            for (KitDefinition kit : getKits()) {
+                if (!options.contains(kit.name)) options.add(kit.name);
+            }
+            return matching(options, args[0]);
+        }
+
+        if (args.length == 2) {
+            String sub = args[0].toLowerCase(Locale.ROOT);
+            if (sub.equals("claim") || sub.equals("preview")) {
+                return matching(kitNames(), args[1]);
+            }
+            if (owner && (sub.equals("edit") || sub.equals("replace") || sub.equals("delete") || sub.equals("give"))) {
+                return matching(kitNames(), args[1]);
+            }
+            return List.of();
+        }
+
+        if (args.length == 3 && owner && args[0].equalsIgnoreCase("give")) {
+            List<String> onlinePlayers = new ArrayList<>();
+            for (Player player : Bukkit.getOnlinePlayers()) onlinePlayers.add(player.getName());
+            return matching(onlinePlayers, args[2]);
+        }
+
+        return List.of();
+    }
+
+    private List<String> kitNames() {
+        List<String> names = new ArrayList<>();
+        for (KitDefinition kit : getKits()) names.add(kit.name);
+        names.sort(String.CASE_INSENSITIVE_ORDER);
+        return names;
+    }
+
+    private List<String> matching(List<String> options, String token) {
+        String prefix = token == null ? "" : token.toLowerCase(Locale.ROOT);
+        List<String> matches = new ArrayList<>();
+        for (String option : options) {
+            if (option.toLowerCase(Locale.ROOT).startsWith(prefix)) matches.add(option);
+        }
+        return matches;
     }
 
     private boolean handleKitCommand(CommandSender sender, String[] args) {
