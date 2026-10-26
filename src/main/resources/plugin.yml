@@ -1,11 +1,12 @@
 name: DialogKits
-version: 1.0.9
+version: 1.1.0
 main: com.taho.dialogkits.DialogKitsPlugin
 api-version: '1.21.11'
 description: Native Java dialogs for PlayerKits2, with Floodgate Bedrock fallback.
 author: Taho
 softdepend:
   - PlayerKits2
+  - LuckPerms
   - peyajAuth
   - floodgate
 
@@ -19,8 +20,8 @@ commands:
 
 permissions:
   dialogkits.admin:
-    description: Allows editing kit positions in the native DialogKits admin dialog.
-    default: op
+    description: Legacy permission node; admin access is restricted to the configured LuckPerms owner primary group.
+    default: false
   dialogkits.open:
     description: Allows opening the DialogKits menu.
     default: true
