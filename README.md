@@ -48,7 +48,7 @@ Requires Java 21+ and Maven:
 
     mvn clean package
 
-The JAR is generated at target/DialogKits.jar.
+The versioned JAR is generated at `target/DialogKits-${project.version}.jar` (for example, `DialogKits-1.2.5.jar`). The embedded `plugin.yml` also carries the plugin version.
 
 
 ## Command tab completion
