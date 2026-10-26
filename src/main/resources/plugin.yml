@@ -1,5 +1,5 @@
 name: DialogKits
-version: 1.2.9
+version: 1.3.0
 main: com.taho.dialogkits.DialogKitsPlugin
 api-version: '1.21.11'
 description: Standalone kit management with native Java dialogs and a Bedrock chest GUI.
@@ -14,7 +14,7 @@ softdepend:
 commands:
   kit:
     description: Open or manage standalone DialogKits kits.
-    usage: /kit [help|open|<kit>|claim <kit>|preview <kit>|create <name>|edit <kit>|replace <kit>|remove <kit>|delete <kit>|give <kit> <player>|verify|reload]
+    usage: /kit [help|open|<kit>|claim <kit>|preview <kit>|create <name>|edit <kit>|replace <kit>|remove <kit>|delete <kit>|give <kit> <player>|verify|reload|bedrockedit]
     aliases: [kits, playerkits]
   dialogkits:
     description: Open or manage the standalone DialogKits menu.

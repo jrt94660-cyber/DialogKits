@@ -31,6 +31,8 @@ bedrock:
   enabled: true
   title: "&8Player Kits"
   preview-title: "&8Preview: %kit%"
+  editor-title: "&8Bedrock Kit Layout"
+  unassigned-title: "&8Unassigned Kits"
   filler: BLACK_STAINED_GLASS_PANE
 
 kits:

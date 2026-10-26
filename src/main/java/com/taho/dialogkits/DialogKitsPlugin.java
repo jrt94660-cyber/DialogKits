@@ -59,6 +59,9 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
     private YamlConfiguration playerData;
     private File orderFile;
     private YamlConfiguration orderData;
+    private File bedrockOrderFile;
+    private YamlConfiguration bedrockOrderData;
+    private final Map<UUID, String> selectedBedrockLayoutKit = new LinkedHashMap<>();
     private File migrationFile;
     private YamlConfiguration migrationData;
     private File kitsFolder;
@@ -79,6 +82,8 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         loadKits();
         loadAdminOrderData();
         migrateLegacyInventoryLayout();
+        loadBedrockOrderData();
+        migrateBedrockOrderData();
         loadPlayerData();
         migrateLegacyPlayerData();
         migratePreviousDialogKitsClaimData();
@@ -100,6 +105,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
     public void onDisable() {
         savePlayerData();
         saveAdminOrderData();
+        saveBedrockOrderData();
     }
 
     private void registerCommand(String name) {
@@ -146,7 +152,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         if (args.length == 1) {
             List<String> options = new ArrayList<>(List.of("help", "open", "claim", "preview"));
             if (operator) {
-                options.addAll(List.of("create", "replace", "remove", "delete", "reload", "verify"));
+                options.addAll(List.of("create", "replace", "remove", "delete", "reload", "verify", "bedrockedit"));
             }
             if (owner) {
                 options.addAll(List.of("edit", "give"));
@@ -206,6 +212,16 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
         if (args[0].equalsIgnoreCase("help")) {
             showKitHelp(sender);
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("bedrockedit")) {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("Only in-game OP players can edit the Bedrock kit layout.");
+                return true;
+            }
+            if (!requireOperator(player)) return true;
+            openBedrockLayoutEditor(player);
             return true;
         }
 
@@ -269,6 +285,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             loadMessages();
             loadKits();
             loadAdminOrderData();
+            loadBedrockOrderData();
             loadPlayerData();
             sender.sendMessage(colored("&aDialogKits configuration, kits, and messages reloaded."));
             return true;
@@ -397,7 +414,8 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             sender.sendMessage(colored("&b/kit replace <kit> &7- Replace kit items with your inventory, armor, and off-hand"));
             sender.sendMessage(colored("&b/kit reload &7- Reload DialogKits settings, messages, and kits"));
             sender.sendMessage(colored("&b/kit verify &7- Check kit item files"));
-            sender.sendMessage(colored("&b/dialogkitsadmin edit &7- Set the kit dialog positions"));
+            sender.sendMessage(colored("&b/kit bedrockedit &7- Arrange kits in the Bedrock chest menu"));
+            sender.sendMessage(colored("&b/dialogkitsadmin edit &7- Set native Java dialog positions"));
         }
 
         if (sender instanceof Player player && isOwnerRank(player)) {
@@ -523,16 +541,98 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         Inventory inventory = Bukkit.createInventory(holder, 54, colored(getConfig().getString("bedrock.title", "&8Player Kits")));
         holder.inventory = inventory;
         fillInventory(inventory);
-        for (KitDefinition kit : getManuallyAssignedKits()) {
-            int slot = getAssignedSlot(kit.name) - 1;
+        for (KitDefinition kit : getBedrockAssignedKits()) {
+            int slot = getBedrockAssignedSlot(kit.name) - 1;
             if (slot >= 0 && slot < 50) inventory.setItem(slot, bedrockKitItem(player, kit));
         }
-        if (isOwnerRank(player)) {
+        if (player.isOp()) {
             ItemStack admin = namedItem(Material.WRITABLE_BOOK, "&aDialogKits Admin",
-                    List.of(colored("&7Create: &f/kit create <name>"), colored("&7Edit positions: &f/dialogkitsadmin edit")));
+                    List.of(colored("&7Create: &f/kit create <name>"),
+                            colored("&7Bedrock layout: &f/kit bedrockedit"),
+                            colored("&7Java dialog: &f/dialogkitsadmin edit")));
             inventory.setItem(53, admin);
         }
         player.openInventory(inventory);
+    }
+
+    private void openBedrockLayoutEditor(Player player) {
+        MenuHolder holder = new MenuHolder(MenuType.BEDROCK_LAYOUT, null);
+        Inventory inventory = Bukkit.createInventory(holder, 54,
+                colored(getConfig().getString("bedrock.editor-title", "&8Bedrock Kit Layout")));
+        holder.inventory = inventory;
+        String selected = selectedBedrockLayoutKit.get(player.getUniqueId());
+        for (KitDefinition kit : getBedrockAssignedKits()) {
+            int slot = getBedrockAssignedSlot(kit.name) - 1;
+            if (slot >= 0 && slot < 50) {
+                inventory.setItem(slot, bedrockLayoutKitItem(kit, selected != null && selected.equalsIgnoreCase(kit.name)));
+            }
+        }
+        inventory.setItem(50, namedItem(Material.WRITABLE_BOOK, "&bUnassigned Kits",
+                List.of(colored("&7Click to browse kits not placed in this menu."),
+                        colored("&7Select one, then click a target slot."))));
+        inventory.setItem(51, namedItem(Material.PAPER, "&eHow to Arrange",
+                List.of(colored("&7Click a placed kit to select it."),
+                        colored("&7Then click any slot from 1 to 50 to move it."),
+                        colored("&7Occupied destinations swap positions."),
+                        colored("&7Right-click a placed kit to unassign it."))));
+        inventory.setItem(52, namedItem(Material.BARRIER, "&cUnassign Selected",
+                List.of(colored("&7Removes the selected kit from the Bedrock menu."))));
+        inventory.setItem(53, namedItem(Material.EMERALD, "&aDone",
+                List.of(colored("&7Close the layout editor."))));
+        player.openInventory(inventory);
+    }
+
+    private ItemStack bedrockLayoutKitItem(KitDefinition kit, boolean selected) {
+        ItemStack item = getKitIcon(kit);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(colored(getKitDisplayName(kit)));
+            List<String> lore = new ArrayList<>();
+            lore.add(colored("&7Bedrock slot: &f" + getBedrockAssignedSlot(kit.name)));
+            if (selected) lore.add(colored("&aSelected - click a destination slot."));
+            else lore.add(colored("&eClick to select this kit."));
+            lore.add(colored("&7Right-click to remove from the Bedrock layout."));
+            meta.setLore(lore);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private void openBedrockUnassignedKits(Player player, int page) {
+        List<KitDefinition> unassigned = new ArrayList<>();
+        for (KitDefinition kit : getKits()) {
+            if (getBedrockAssignedSlot(kit.name) < 1 || getBedrockAssignedSlot(kit.name) > 50) unassigned.add(kit);
+        }
+        int pageSize = 45;
+        int pages = Math.max(1, (unassigned.size() + pageSize - 1) / pageSize);
+        int safePage = Math.max(0, Math.min(page, pages - 1));
+        MenuHolder holder = new MenuHolder(MenuType.BEDROCK_UNASSIGNED, null, safePage);
+        Inventory inventory = Bukkit.createInventory(holder, 54,
+                colored(getConfig().getString("bedrock.unassigned-title", "&8Unassigned Kits") + " &7(" + (safePage + 1) + "/" + pages + ")"));
+        holder.inventory = inventory;
+        fillInventory(inventory);
+        int start = safePage * pageSize;
+        int end = Math.min(unassigned.size(), start + pageSize);
+        for (int i = start; i < end; i++) {
+            KitDefinition kit = unassigned.get(i);
+            inventory.setItem(i - start, getKitIconForLayout(kit));
+        }
+        if (safePage > 0) inventory.setItem(45, namedItem(Material.ARROW, "&ePrevious Page", List.of()));
+        inventory.setItem(49, namedItem(Material.BARRIER, "&cBack to Layout", List.of()));
+        if (safePage + 1 < pages) inventory.setItem(53, namedItem(Material.ARROW, "&eNext Page", List.of()));
+        player.openInventory(inventory);
+    }
+
+    private ItemStack getKitIconForLayout(KitDefinition kit) {
+        ItemStack item = getKitIcon(kit);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(colored(getKitDisplayName(kit)));
+            meta.setLore(List.of(colored("&7Not currently in the Bedrock menu."),
+                    colored("&eClick to select, then choose a slot.")));
+            item.setItemMeta(meta);
+        }
+        return item;
     }
 
     private ItemStack bedrockKitItem(Player player, KitDefinition kit) {
@@ -593,14 +693,86 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         event.setCancelled(true);
         if (event.getRawSlot() < 0 || event.getRawSlot() >= top.getSize()) return;
 
-        if (holder.type == MenuType.MAIN) {
+        if (holder.type == MenuType.BEDROCK_LAYOUT) {
             int slot = event.getRawSlot();
-            if (slot == 53 && isOwnerRank(player)) {
-                player.closeInventory();
-                tell(player, "admin-help", "&7Create kits with &f/kit create <name>&7. Assign positions with &f/dialogkitsadmin edit&7.");
+            if (slot >= 50) {
+                if (slot == 50) openBedrockUnassignedKits(player, 0);
+                else if (slot == 51) tell(player, "bedrock-layout-help", "&7Select a kit, then click a destination slot. Right-click a kit to unassign it.");
+                else if (slot == 52) {
+                    String selected = selectedBedrockLayoutKit.get(player.getUniqueId());
+                    if (selected == null) {
+                        tell(player, "bedrock-layout-none-selected", "&cSelect a kit first.");
+                    } else {
+                        unassignBedrockKit(player, selected);
+                        selectedBedrockLayoutKit.remove(player.getUniqueId());
+                        tell(player, "bedrock-layout-unassigned", "&aRemoved &f%kit% &afrom the Bedrock menu.", "%kit%", selected);
+                        openBedrockLayoutEditor(player);
+                    }
+                } else if (slot == 53) {
+                    selectedBedrockLayoutKit.remove(player.getUniqueId());
+                    player.closeInventory();
+                }
                 return;
             }
-            KitDefinition clicked = findKitForMenuSlot(slot + 1);
+            KitDefinition occupant = findBedrockKitForMenuSlot(slot + 1);
+            String selected = selectedBedrockLayoutKit.get(player.getUniqueId());
+            if (selected == null) {
+                if (event.isRightClick() && occupant != null) {
+                    unassignBedrockKit(player, occupant.name);
+                    tell(player, "bedrock-layout-unassigned", "&aRemoved &f%kit% &afrom the Bedrock menu.", "%kit%", occupant.name);
+                    openBedrockLayoutEditor(player);
+                } else if (occupant != null) {
+                    selectedBedrockLayoutKit.put(player.getUniqueId(), occupant.name);
+                    openBedrockLayoutEditor(player);
+                }
+                return;
+            }
+            if (occupant != null && occupant.name.equalsIgnoreCase(selected)) {
+                selectedBedrockLayoutKit.remove(player.getUniqueId());
+                openBedrockLayoutEditor(player);
+                return;
+            }
+            assignBedrockKitToSlot(player, selected, slot + 1);
+            selectedBedrockLayoutKit.remove(player.getUniqueId());
+            openBedrockLayoutEditor(player);
+            return;
+        }
+
+        if (holder.type == MenuType.BEDROCK_UNASSIGNED) {
+            int slot = event.getRawSlot();
+            if (slot == 49) {
+                openBedrockLayoutEditor(player);
+                return;
+            }
+            if (slot == 45 && holder.page > 0) {
+                openBedrockUnassignedKits(player, holder.page - 1);
+                return;
+            }
+            if (slot == 53) {
+                openBedrockUnassignedKits(player, holder.page + 1);
+                return;
+            }
+            if (slot < 0 || slot >= 45) return;
+            List<KitDefinition> unassigned = new ArrayList<>();
+            for (KitDefinition kit : getKits()) {
+                if (getBedrockAssignedSlot(kit.name) < 1 || getBedrockAssignedSlot(kit.name) > 50) unassigned.add(kit);
+            }
+            int index = holder.page * 45 + slot;
+            if (index >= 0 && index < unassigned.size()) {
+                KitDefinition selected = unassigned.get(index);
+                selectedBedrockLayoutKit.put(player.getUniqueId(), selected.name);
+                openBedrockLayoutEditor(player);
+            }
+            return;
+        }
+
+        if (holder.type == MenuType.MAIN) {
+            int slot = event.getRawSlot();
+            if (slot == 53 && player.isOp()) {
+                openBedrockLayoutEditor(player);
+                return;
+            }
+            KitDefinition clicked = findBedrockKitForMenuSlot(slot + 1);
             if (clicked == null) return;
             if (event.isRightClick()) openBedrockPreview(player, clicked);
             else if (event.isLeftClick()) {
@@ -698,6 +870,13 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
                 orderData.set("slots." + encodeKitId(name), freeSlot);
                 saveAdminOrderData();
             }
+            if (getBedrockAssignedSlot(name) == 0) {
+                int bedrockFreeSlot = findFirstFreeBedrockSlot();
+                if (bedrockFreeSlot > 0) {
+                    bedrockOrderData.set("slots." + encodeKitId(name), bedrockFreeSlot);
+                    saveBedrockOrderData();
+                }
+            }
         }
         tell(player, "kit-created", "&aKit &f%kit% &acreated from your inventory.", "%kit%", name);
         if (created != null && getAssignedSlot(name) > 0) {
@@ -777,6 +956,9 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         }
         orderData.set("slots." + encodeKitId(kit.name), null);
         saveAdminOrderData();
+        bedrockOrderData.set("slots." + encodeKitId(kit.name), null);
+        saveBedrockOrderData();
+        selectedBedrockLayoutKit.values().removeIf(selected -> selected.equalsIgnoreCase(kit.name));
         ConfigurationSection players = playerData.getConfigurationSection("players");
         if (players != null) {
             for (String uuidText : players.getKeys(false)) {
@@ -1451,7 +1633,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         orderData.set("slots." + selectedKey, slot);
         saveAdminOrderData();
         player.sendMessage(colored("&aSet &f" + kit.name + " &ato slot &f" + slot + "&a."));
-        openAdminSlotSelection(player, kit.name);
+        openAdminKitSelection(player);
     }
 
     private List<KitDefinition> getManuallyAssignedKits() {
@@ -1493,6 +1675,67 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
     private int findFirstFreeManualSlot() {
         for (int slot = 1; slot <= 50; slot++) if (getKitAssignedToSlot(slot) == null) return slot;
         return 0;
+    }
+
+    private List<KitDefinition> getBedrockAssignedKits() {
+        List<KitDefinition> assigned = new ArrayList<>();
+        for (KitDefinition kit : getKits()) {
+            int slot = getBedrockAssignedSlot(kit.name);
+            if (slot >= 1 && slot <= 50) assigned.add(kit);
+        }
+        assigned.sort(Comparator.comparingInt(kit -> getBedrockAssignedSlot(kit.name)));
+        return assigned;
+    }
+
+    private int getBedrockAssignedSlot(String kitName) {
+        return bedrockOrderData == null || kitName == null
+                ? 0 : bedrockOrderData.getInt("slots." + encodeKitId(kitName), 0);
+    }
+
+    private KitDefinition findBedrockKitForMenuSlot(int slot) {
+        for (KitDefinition kit : getKits()) {
+            if (getBedrockAssignedSlot(kit.name) == slot) return kit;
+        }
+        return null;
+    }
+
+    private String findBedrockOrderKeyForSlot(int slot) {
+        if (bedrockOrderData == null || bedrockOrderData.getConfigurationSection("slots") == null) return null;
+        for (String key : bedrockOrderData.getConfigurationSection("slots").getKeys(false)) {
+            if (bedrockOrderData.getInt("slots." + key, 0) == slot) return key;
+        }
+        return null;
+    }
+
+    private int findFirstFreeBedrockSlot() {
+        for (int slot = 1; slot <= 50; slot++) if (findBedrockOrderKeyForSlot(slot) == null) return slot;
+        return 0;
+    }
+
+    private void assignBedrockKitToSlot(Player player, String kitName, int slot) {
+        KitDefinition kit = findKit(kitName);
+        if (kit == null || slot < 1 || slot > 50) {
+            tell(player, "bedrock-layout-invalid", "&cThat kit or slot is invalid.");
+            return;
+        }
+        String selectedKey = encodeKitId(kit.name);
+        int oldSlot = getBedrockAssignedSlot(kit.name);
+        String occupantKey = findBedrockOrderKeyForSlot(slot);
+        if (occupantKey != null && !occupantKey.equals(selectedKey)) {
+            if (oldSlot > 0) bedrockOrderData.set("slots." + occupantKey, oldSlot);
+            else bedrockOrderData.set("slots." + occupantKey, null);
+        }
+        bedrockOrderData.set("slots." + selectedKey, slot);
+        saveBedrockOrderData();
+        tell(player, "bedrock-layout-moved", "&aPlaced &f%kit% &ain Bedrock menu slot &f%slot%&a.",
+                "%kit%", kit.name, "%slot%", String.valueOf(slot));
+    }
+
+    private void unassignBedrockKit(Player player, String kitName) {
+        KitDefinition kit = findKit(kitName);
+        if (kit == null) return;
+        bedrockOrderData.set("slots." + encodeKitId(kit.name), null);
+        saveBedrockOrderData();
     }
 
     private KitDefinition findKit(String name) {
@@ -1731,6 +1974,32 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         if (orderData != null && orderFile != null) saveYaml(orderData, orderFile);
     }
 
+    private void loadBedrockOrderData() {
+        bedrockOrderFile = new File(getDataFolder(), "bedrock-order.yml");
+        bedrockOrderData = YamlConfiguration.loadConfiguration(bedrockOrderFile);
+    }
+
+    private void migrateBedrockOrderData() {
+        if (migrationData.getBoolean("bedrock-order-imported", false)) return;
+        ConfigurationSection existing = bedrockOrderData.getConfigurationSection("slots");
+        if (existing == null || existing.getKeys(false).isEmpty()) {
+            ConfigurationSection oldSlots = orderData.getConfigurationSection("slots");
+            if (oldSlots != null) {
+                for (String key : oldSlots.getKeys(false)) {
+                    int slot = oldSlots.getInt(key, 0);
+                    if (slot >= 1 && slot <= 50) bedrockOrderData.set("slots." + key, slot);
+                }
+            }
+            saveBedrockOrderData();
+        }
+        migrationData.set("bedrock-order-imported", true);
+        saveMigrationData();
+    }
+
+    private void saveBedrockOrderData() {
+        if (bedrockOrderData != null && bedrockOrderFile != null) saveYaml(bedrockOrderData, bedrockOrderFile);
+    }
+
     private void loadPlayerData() {
         playerDataFile = new File(getDataFolder(), "player-data.yml");
         playerData = YamlConfiguration.loadConfiguration(playerDataFile);
@@ -1903,16 +2172,22 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         }
     }
 
-    private enum MenuType { MAIN, PREVIEW, EDITOR }
+    private enum MenuType { MAIN, PREVIEW, EDITOR, BEDROCK_LAYOUT, BEDROCK_UNASSIGNED }
 
     private final class MenuHolder implements InventoryHolder {
         private final MenuType type;
         private final String kitName;
+        private final int page;
         private Inventory inventory;
 
         private MenuHolder(MenuType type, String kitName) {
+            this(type, kitName, 0);
+        }
+
+        private MenuHolder(MenuType type, String kitName, int page) {
             this.type = type;
             this.kitName = kitName;
+            this.page = page;
         }
 
         @Override
