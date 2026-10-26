@@ -261,8 +261,8 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         }
 
         if (sub.equals("reload")) {
-            if (sender instanceof Player player && !player.isOp()) {
-                tell(player, "no-permission", "&cOnly OP players can reload DialogKits.");
+            if (!(sender instanceof Player player) || !player.isOp()) {
+                sender.sendMessage(colored("&cOnly in-game OP players can reload DialogKits."));
                 return true;
             }
             reloadConfig();

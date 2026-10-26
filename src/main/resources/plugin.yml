@@ -1,5 +1,5 @@
 name: DialogKits
-version: 1.2.7
+version: 1.2.8
 main: com.taho.dialogkits.DialogKitsPlugin
 api-version: '1.21.11'
 description: Standalone kit management with native Java dialogs and a Bedrock chest GUI.
