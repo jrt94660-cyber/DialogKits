@@ -34,11 +34,11 @@ DialogKits is now an independent kit plugin. It no longer needs PlayerKits2 at r
 
 ## Migration
 
-1. Back up the server before changing kit plugins.
-2. Install DialogKits 1.2.0 while plugins/PlayerKits2/ is still present. DialogKits copies kit YAML files and supported settings on first start.
-3. Verify plugins/DialogKits/kits/, previews, menu ordering, permission nodes, cooldowns, and imported claim-data mappings.
-4. Disable/remove the PlayerKits2 JAR after verifying the migration. Keep its folder as a backup until satisfied.
-5. Edit only DialogKits from then on; its config and kit data are independent.
+1. Stop the server and back it up.
+2. Move the PlayerKits2 JAR out of the plugins folder, but leave plugins/PlayerKits2/ and all its files in place.
+3. Install DialogKits 1.2.0 and start the server. The importer reads the old folder and copies compatible data without changing it. Removing the JAR first prevents both plugins from competing for /kit.
+4. Verify plugins/DialogKits/kits/, previews, menu ordering, permission nodes, cooldowns, and imported claim-data mappings.
+5. Keep plugins/PlayerKits2/ as a backup until you are satisfied, then edit only DialogKits. The two config.yml files and kit folders remain separate.
 
 The importer uses explicit aliases for the uploaded server data, including StarterKit to Starter, BoosterKit to booster, OgKit to og, Taho+Kit to taho+, Taho++Kit to taho++, and ComedianKit to media. Claims that cannot be confidently mapped are skipped instead of assigned to a potentially wrong kit. Advanced third-party PlayerKits2 extensions and MySQL-specific storage are not imported by this initial standalone conversion; Vault, PlaceholderAPI, and Floodgate integrations are optional.
 
