@@ -1,5 +1,5 @@
 name: DialogKits
-version: 1.0.0
+version: 1.0.1
 main: com.taho.dialogkits.DialogKitsPlugin
 api-version: '1.21.7'
 description: Native Java dialogs for PlayerKits2, with Floodgate Bedrock fallback.
