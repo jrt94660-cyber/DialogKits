@@ -704,7 +704,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         }
         Object kitsManager = invoke(plugin, "getKitsManager");
         List<?> kits = listValue(invoke(kitsManager, "getKits"));
-        return kits == null ? Collections.emptyList() : kits;
+        return kits == null ? List.of() : kits;
     }
 
     private boolean handleAdminCommand(CommandSender sender, String[] args) {
@@ -789,7 +789,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
                         .canCloseWithEscape(true)
                         .pause(false)
                         .body(List.of(DialogBody.plainMessage(
-                                color("&7Choose the kit you want to position. Manual slots override LuckPerms weight."),
+                                color("&7Choose a kit to assign a manual position in the player kit dialog."),
                                 340
                         )))
                         .build())
@@ -829,7 +829,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         }
 
         String description = "&7Choose a slot from 1 to 50 for &f" + getKitDisplayName(kit, kitId) + "&7."
-                + "\n&8Manual positions take priority over LuckPerms group weights.";
+                + "\n&8Kits are displayed according to manually assigned positions only.";
         if (currentSlot > 0) {
             description += "\n&aCurrent position: " + currentSlot;
         }
