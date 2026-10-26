@@ -1,6 +1,6 @@
 # DialogKits
 
-**Current version: 1.0.1**
+**Current version: 1.0.2**
 
 DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
 
@@ -15,11 +15,13 @@ DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.
 - Kit names and buttons are read from PlayerKits2 at runtime; no duplicate kit config is required.
 - Button labels and dialog titles are configurable in `config.yml`.
 
-## Requirements
+## Compatibility
 
-- Paper 1.21.7 or newer (the build targets Paper 26.1.2).
-- PlayerKits2 installed and enabled.
-- Java clients that support native Minecraft dialogs (1.21.6+).
+- Targets the Paper API for **Minecraft 1.21.11**, the oldest supported server version.
+- Intended to run on Paper **1.21.11 through 26.3** while staying on the common dialog/API surface.
+- Build bytecode targets Java 21. Paper 26.x servers themselves require Java 25 or newer to run.
+- Java clients must support native Minecraft dialogs (1.21.6+).
+- PlayerKits2 must be installed and enabled.
 - Floodgate is optional and detected automatically for Bedrock fallback.
 
 ## Commands
@@ -33,7 +35,7 @@ Other PlayerKits2 commands, such as `/kit claim`, `/kit create`, `/kit edit`, an
 
 ## Build
 
-Use Java 25 and Maven:
+Use Java 21 or newer with Maven:
 
 ```sh
 mvn clean package
