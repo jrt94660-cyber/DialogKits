@@ -4,6 +4,12 @@
 intercept-kit-command: true
 bedrock-use-playerkits-gui: true
 
+# When LuckPerms is installed, sort matching rank kits by group weight.
+# Lower weight appears higher in the kit list; higher weight appears below it.
+rank-order:
+  enabled: true
+  unmatched-kits-last: true
+
 ui:
   title: "&8Player Kits"
   description: "&7Choose an action for each kit. Ready is green, Claimed is yellow, Locked is red."
