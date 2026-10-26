@@ -1,6 +1,6 @@
 # DialogKits
 
-**Current version: 1.0.8**
+**Current version: 1.0.9**
 
 DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
 
@@ -16,11 +16,9 @@ DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.
 - Claiming is delegated to PlayerKits2's kit manager, preserving its permission, cooldown, requirement, inventory, economy, and action checks.
 - Floodgate players retain the existing PlayerKits2 chest GUI.
 - Kit names and kit data are read from PlayerKits2 at runtime; no duplicate kit config is required.
-- Kits that do not require a permission appear at the very top of the Java dialog.
-- Permission-based rank kits appear underneath, sorted by LuckPerms group weight from lowest to highest. Kits are matched by group name first, then by the kit permission assigned directly to a weighted group. Unmatched permission-based kits stay after ranked kits by default.
-- Permission-free kits stay at the top even if LuckPerms is unavailable.
+- The Java kit dialog displays only kits that an admin has explicitly assigned to a manual slot (1–50). Unassigned kits remain hidden until assigned a slot.
 - Ready, Claimed, and Locked button labels and dialog titles are configurable in `config.yml`.
-- LuckPerms rank ordering can be controlled through `rank-order.enabled` and `rank-order.unmatched-kits-last` in `config.yml`.
+- The main `/kit` and `/kits` dialog always includes exactly one **Add Kit** button, even after kits have been added. It opens `/dialogkitsadmin edit`.
 
 ## Compatibility
 
@@ -37,7 +35,7 @@ DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.
 - `/dialogkits claim <kit>` — claims via PlayerKits2 and refreshes the Ready/Claimed state.
 - `/dialogkits preview <kit>` — opens the native preview dialog.
 - `/dialogkits reload` — reloads DialogKits configuration (OP by default).
-- `/dialogkitsadmin edit` — opens a native admin dialog listing all kits. Select a kit, then choose Slot 1–50 to set its manual position. Manual slot assignments are saved in `plugins/DialogKits/kit-order.yml` and take priority over LuckPerms weight. If a slot is already occupied, its current kit is moved to the selected kit's previous manual slot when applicable, otherwise it returns to automatic ordering.
+- `/dialogkitsadmin edit` — opens a native admin dialog listing all PlayerKits2 kits. Select a kit, then choose Slot 1–50 to make it appear in that manual position. Manual positions are saved in `plugins/DialogKits/kit-order.yml`. If a slot is occupied, its kit swaps to the selected kit's previous slot if applicable; otherwise it becomes unassigned.
 
 Other PlayerKits2 administrative commands remain available.
 
