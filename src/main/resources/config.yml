@@ -4,8 +4,9 @@
 intercept-kit-command: true
 bedrock-use-playerkits-gui: true
 
-# When LuckPerms is installed, sort matching rank kits by group weight.
-# Lower weight appears higher in the kit list; higher weight appears below it.
+# Kits that do not require a permission appear first.
+# Then rank kits are sorted by LuckPerms group weight, lowest to highest.
+# If LuckPerms is unavailable, permission-free kits still appear first.
 rank-order:
   enabled: true
   unmatched-kits-last: true
