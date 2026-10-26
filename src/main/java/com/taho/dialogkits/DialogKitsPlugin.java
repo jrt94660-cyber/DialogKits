@@ -80,6 +80,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         migrateLegacyInventoryLayout();
         loadPlayerData();
         migrateLegacyPlayerData();
+        migratePreviousDialogKitsClaimData();
         loadMessages();
 
         registerCommand("kit");
@@ -89,7 +90,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
         Plugin oldPlugin = Bukkit.getPluginManager().getPlugin("PlayerKits2");
         if (oldPlugin != null && oldPlugin.isEnabled()) {
-            getLogger().warning("PlayerKits2 is still enabled. DialogKits is standalone now; disable PlayerKits2 after checking the imported kits to avoid /kit command conflicts. Its folder and files will not be deleted.");
+            getLogger().warning("PlayerKits2 is still enabled. For predictable /kit routing, move its JAR out of the plugins folder before the next restart; keep plugins/PlayerKits2 as your untouched backup.");
         }
         getLogger().info("Standalone DialogKits enabled with " + kits.size() + " kit(s).");
     }
@@ -1541,6 +1542,42 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         migrationData.set("imported-player-kit-states", imported);
         saveMigrationData();
         getLogger().info("Imported " + imported + " claim/cooldown state(s) from PlayerKits2/players where kit names could be matched. Original files were not changed.");
+    }
+
+
+    private void migratePreviousDialogKitsClaimData() {
+        if (migrationData.getBoolean("dialogkits-claim-history-imported", false)) return;
+        File oldFile = new File(getDataFolder(), "claimed.yml");
+        if (!oldFile.isFile()) return;
+
+        YamlConfiguration old = YamlConfiguration.loadConfiguration(oldFile);
+        int imported = 0;
+        for (String uuidText : old.getKeys(false)) {
+            UUID uuid;
+            try {
+                uuid = UUID.fromString(uuidText);
+            } catch (IllegalArgumentException ignored) {
+                continue;
+            }
+            ConfigurationSection playerClaims = old.getConfigurationSection(uuidText);
+            if (playerClaims == null) continue;
+            for (String encodedName : playerClaims.getKeys(false)) {
+                if (!playerClaims.getBoolean(encodedName, false)) continue;
+                String kitName = decodeKitId(encodedName);
+                KitDefinition kit = findKit(kitName);
+                if (kit == null) continue;
+                String path = playerKitPath(uuid, kit.name);
+                if (playerData.contains(path + ".claimed")) continue;
+                playerData.set(path + ".claimed", true);
+                imported++;
+            }
+        }
+
+        savePlayerData();
+        migrationData.set("dialogkits-claim-history-imported", true);
+        migrationData.set("imported-dialogkits-claim-states", imported);
+        saveMigrationData();
+        getLogger().info("Imported " + imported + " legacy DialogKits claim marker(s) from claimed.yml. The old file was not changed.");
     }
 
     private void loadAdminOrderData() {
