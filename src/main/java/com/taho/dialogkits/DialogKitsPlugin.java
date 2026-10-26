@@ -135,7 +135,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
         if (commandName.equals("dialogkitsadmin")) {
             if (args.length == 1) {
-                List<String> options = owner
+                List<String> options = operator
                         ? List.of("edit", "help", "choose", "assign")
                         : List.of();
                 return matching(options, args[0]);
@@ -146,10 +146,10 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         if (args.length == 1) {
             List<String> options = new ArrayList<>(List.of("help", "open", "claim", "preview"));
             if (operator) {
-                options.addAll(List.of("create", "replace", "remove", "delete", "reload"));
+                options.addAll(List.of("create", "replace", "remove", "delete", "reload", "verify"));
             }
             if (owner) {
-                options.addAll(List.of("edit", "give", "verify"));
+                options.addAll(List.of("edit", "give"));
             }
             // The kit name used in lore (for example /kit FlipplLow) is also
             // suggested, so direct kit claims are discoverable without guessing.
@@ -355,10 +355,10 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
         if (sub.equals("verify")) {
             if (!(sender instanceof Player player)) {
-                sender.sendMessage("Only players with the configured LuckPerms owner rank can run this command.");
+                sender.sendMessage("Only in-game OP players can run this command.");
                 return true;
             }
-            if (!requireOwner(player)) return true;
+            if (!requireOperator(player)) return true;
             int bad = 0;
             for (KitDefinition kit : getKits()) {
                 if (getKitItems(kit).isEmpty()) {
@@ -396,14 +396,14 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             sender.sendMessage(colored("&b/kit remove <kit> &7- Remove a kit (alias: /kit delete <kit>)"));
             sender.sendMessage(colored("&b/kit replace <kit> &7- Replace kit items with your inventory, armor, and off-hand"));
             sender.sendMessage(colored("&b/kit reload &7- Reload DialogKits settings, messages, and kits"));
+            sender.sendMessage(colored("&b/kit verify &7- Check kit item files"));
+            sender.sendMessage(colored("&b/dialogkitsadmin edit &7- Set the kit dialog positions"));
         }
 
         if (sender instanceof Player player && isOwnerRank(player)) {
             sender.sendMessage(colored("&8&m---------------- &eOwner Commands &8&m----------------"));
             sender.sendMessage(colored("&b/kit edit <name> &7- Edit a kit's item contents"));
             sender.sendMessage(colored("&b/kit give <kit> <player> &7- Give a kit to a player"));
-            sender.sendMessage(colored("&b/kit verify &7- Check kit item files"));
-            sender.sendMessage(colored("&b/dialogkitsadmin edit &7- Set the kit dialog positions"));
         }
         sender.sendMessage(colored("&7You can also open the menu with &f/dialogkits"));
     }
@@ -435,7 +435,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
                     color("&7Preview the contents of &f" + displayName + "&7.")));
         }
 
-        if (isOwnerRank(player)) {
+        if (player.isOp()) {
             buttons.add(button(color(getConfig().getString("ui.add-kit-button", "&aAdd Kit")),
                     "/dialogkitsadmin edit",
                     color("&7Create kits with &f/kit create <name> &7or select a kit to assign its dialog position.")));
@@ -1347,7 +1347,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             sender.sendMessage("This command opens a native dialog and must be used in-game.");
             return true;
         }
-        if (!requireOwner(player)) return true;
+        if (!requireOperator(player)) return true;
         if (args.length == 0 || args[0].equalsIgnoreCase("edit")) {
             openAdminKitSelection(player);
             return true;
