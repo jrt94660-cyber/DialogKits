@@ -1,21 +1,22 @@
 # DialogKits
 
-**Current version: 1.0.3**
+**Current version: 1.0.4**
 
 DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
 
 ## Features
 
 - On Java Edition, running bare `/kit` (also `/kits` and `/playerkits`) opens a native dialog instead of PlayerKits2's main chest menu.
-- Each PlayerKits2 kit has a **Ready** button in green and a **Preview** action without the kit name on its label.
-- After a successful claim, unlimited kits show a red **Claimed** state; one-time and cooldown kits use PlayerKits2's stored claim state.
-- Successful claims through the menu and normal PlayerKits2 claim commands are reflected in the dialog.
-- The dialog menu displays a real Minecraft Spyglass item alongside the preview guidance.
-- The native preview dialog shows the kit icon and a compact list of its item contents.
-- Claiming uses PlayerKits2's own kit manager, preserving its permission, cooldown, requirement, inventory, economy, and action checks.
+- Every kit shows a green **Ready** button if the player can claim it.
+- Kits the player lacks permission to claim show a red **Locked** button; clicking it displays a permission message instead of attempting a claim.
+- Successfully claimed unlimited kits show **Claimed** in yellow. One-time and cooldown kits use PlayerKits2's stored claim state.
+- Successful claims through the dialog and intercepted PlayerKits2 claim commands refresh the status display.
+- The dialog menu displays a real Minecraft Spyglass item alongside the Preview action.
+- Native preview dialogs show the kit icon and a compact list of its item contents.
+- Claiming is delegated to PlayerKits2's kit manager, preserving its permission, cooldown, requirement, inventory, economy, and action checks.
 - Floodgate players retain the existing PlayerKits2 chest GUI.
 - Kit names and kit data are read from PlayerKits2 at runtime; no duplicate kit config is required.
-- Ready/Claimed button labels and dialog titles are configurable in `config.yml`.
+- Ready, Claimed, and Locked button labels and dialog titles are configurable in `config.yml`.
 
 ## Compatibility
 
