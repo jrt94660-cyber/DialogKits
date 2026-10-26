@@ -4,15 +4,10 @@
 intercept-kit-command: true
 bedrock-use-playerkits-gui: true
 
-# Kits that do not require a permission appear first.
-# Then rank kits are sorted by LuckPerms group weight, lowest to highest.
-# If LuckPerms is unavailable, permission-free kits still appear first.
-rank-order:
-  enabled: true
-  unmatched-kits-last: true
-
 ui:
   title: "&8Player Kits"
+  add-kit-button: "&aAdd Kit"
+  empty-description: "&7No kits have been added yet. Click &aAdd Kit &7to set up the kit list."
   description: "&7Choose an action for each kit. Ready is green, Claimed is yellow, Locked is red."
   use-kit-display-name: true
 
@@ -35,3 +30,4 @@ messages:
   kit-not-found: "&cThat kit does not exist in PlayerKits2."
   preview-usage: "&cUsage: /dialogkits preview <kit>"
   reloaded: "&aDialogKits configuration reloaded."
+  dialog-failed: "&cCould not open the native kit dialog. Check the server console for details."
