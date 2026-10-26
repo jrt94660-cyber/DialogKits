@@ -17,7 +17,7 @@ admin:
 first-join-kit: ""
 
 commands:
-  short-claim: false
+  short-claim: true
 
 claim:
   drop-items-if-full-inventory: false

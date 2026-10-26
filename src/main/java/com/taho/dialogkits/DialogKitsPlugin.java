@@ -292,19 +292,21 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return true;
         }
 
-        if (args.length == 1 && getConfig().getBoolean("commands.short-claim", false)
-                && sender instanceof Player player && findKit(args[0]) != null) {
+        // PlayerKits-style shortcut shown on kit items: /kit <kitName>.
+        // Keep this enabled by default so commands such as /kit FlipplLow work.
+        if (args.length == 1 && sender instanceof Player player && findKit(args[0]) != null) {
             claimKit(player, args[0], false, false);
             return true;
         }
 
-        sender.sendMessage(colored("&7Kit commands: &f/kit help, /kit open, /kit claim <kit>, /kit preview <kit>, /kit create <name>, /kit edit <name>, /kit replace <kit>, /kit delete <kit>, /kit give <kit> <player>, /kit reload"));
+        sender.sendMessage(colored("&7Kit commands: &f/kit help, /kit open, /kit <kit>, /kit claim <kit>, /kit preview <kit>, /kit create <name>, /kit edit <name>, /kit replace <kit>, /kit delete <kit>, /kit give <kit> <player>, /kit reload"));
         return true;
     }
 
     private void showKitHelp(CommandSender sender) {
         sender.sendMessage(colored("&8&m---------------- &bDialogKits Commands &8&m----------------"));
         sender.sendMessage(colored("&b/kit open &7- Open the kit menu"));
+        sender.sendMessage(colored("&b/kit <kit> &7- Claim a kit directly (example: /kit FlipplLow)"));
         sender.sendMessage(colored("&b/kit help &7- Show this command list"));
         sender.sendMessage(colored("&b/kit claim <kit> &7- Claim a kit"));
         sender.sendMessage(colored("&b/kit preview <kit> &7- Preview a kit"));
