@@ -4,10 +4,15 @@
 intercept-kit-command: true
 bedrock-use-playerkits-gui: true
 
+# LuckPerms group allowed to use the native Add Kit/admin editor.
+admin:
+  owner-group: "owner"
+
 ui:
   title: "&8Player Kits"
   add-kit-button: "&aAdd Kit"
   empty-description: "&7No kits have been added yet. Click &aAdd Kit &7to set up the kit list."
+  no-kits-for-player: "&7No kits are available yet."
   description: "&7Choose an action for each kit. Ready is green, Claimed is yellow, Locked is red."
   use-kit-display-name: true
 
