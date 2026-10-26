@@ -689,46 +689,40 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return kits;
         }
 
-        Plugin luckPermsPlugin = Bukkit.getPluginManager().getPlugin("LuckPerms");
-        if (luckPermsPlugin == null || !luckPermsPlugin.isEnabled()) {
-            return kits;
-        }
-
-        Object luckPerms = getLuckPermsApi(luckPermsPlugin);
-        Object groupManager = invoke(luckPerms, "getGroupManager");
-        Object loadedGroupsValue = invoke(groupManager, "getLoadedGroups");
-        if (!(loadedGroupsValue instanceof Collection<?> groups) || groups.isEmpty()) {
-            return kits;
-        }
-
         Map<String, Integer> weightsByGroupName = new HashMap<>();
         Map<String, Integer> weightsByPermission = new HashMap<>();
 
-        for (Object group : groups) {
-            String groupName = stringValue(invoke(group, "getName"));
-            Integer weight = luckPermsWeight(group);
-            if (groupName == null || weight == null) {
-                continue;
-            }
+        // Rank weights are optional: even without LuckPerms, kits which do not
+        // require a permission should still appear above permission-based kits.
+        Plugin luckPermsPlugin = Bukkit.getPluginManager().getPlugin("LuckPerms");
+        if (luckPermsPlugin != null && luckPermsPlugin.isEnabled()) {
+            Object luckPerms = getLuckPermsApi(luckPermsPlugin);
+            Object groupManager = invoke(luckPerms, "getGroupManager");
+            Object loadedGroupsValue = invoke(groupManager, "getLoadedGroups");
+            if (loadedGroupsValue instanceof Collection<?> groups) {
+                for (Object group : groups) {
+                    String groupName = stringValue(invoke(group, "getName"));
+                    Integer weight = luckPermsWeight(group);
+                    if (groupName == null || weight == null) {
+                        continue;
+                    }
 
-            weightsByGroupName.merge(normalizeRankName(groupName), weight, Math::min);
-            Object nodesValue = invoke(group, "getNodes");
-            if (!(nodesValue instanceof Collection<?> nodes)) {
-                continue;
-            }
+                    weightsByGroupName.merge(normalizeRankName(groupName), weight, Math::min);
+                    Object nodesValue = invoke(group, "getNodes");
+                    if (!(nodesValue instanceof Collection<?> nodes)) {
+                        continue;
+                    }
 
-            for (Object node : nodes) {
-                String permission = stringValue(invoke(node, "getKey"));
-                Object value = invoke(node, "getValue");
-                if (permission == null || !Boolean.TRUE.equals(value)) {
-                    continue;
+                    for (Object node : nodes) {
+                        String permission = stringValue(invoke(node, "getKey"));
+                        Object value = invoke(node, "getValue");
+                        if (permission == null || !Boolean.TRUE.equals(value)) {
+                            continue;
+                        }
+                        weightsByPermission.merge(permission.toLowerCase(Locale.ROOT), weight, Math::min);
+                    }
                 }
-                weightsByPermission.merge(permission.toLowerCase(Locale.ROOT), weight, Math::min);
             }
-        }
-
-        if (weightsByGroupName.isEmpty()) {
-            return kits;
         }
 
         List<KitOrderEntry> ordered = new ArrayList<>(kits.size());
@@ -762,8 +756,8 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         Comparator<KitOrderEntry> comparator = Comparator
                 // Kits without a permission requirement always come first.
                 .comparingInt((KitOrderEntry entry) -> entry.permissionRequired() ? 1 : 0)
-                // Keep non-permission kits together in their original order; sort
-                // permission-based kits by ascending LuckPerms group weight.
+                // Keep permission-free kits in their original order. Order the
+                // remaining kits from lowest to highest LuckPerms weight.
                 .thenComparingInt(entry -> !entry.permissionRequired()
                         ? 0
                         : entry.weight() == null
