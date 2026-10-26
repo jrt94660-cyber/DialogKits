@@ -145,7 +145,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         if (args.length == 1) {
             List<String> options = new ArrayList<>(List.of("help", "open", "claim", "preview", "reload"));
             if (owner) {
-                options.addAll(List.of("create", "edit", "replace", "delete", "give", "verify"));
+                options.addAll(List.of("create", "edit", "replace", "remove", "delete", "give", "verify"));
             }
             // The kit name used in lore (for example /kit FlipplLow) is also
             // suggested, so direct kit claims are discoverable without guessing.
@@ -160,7 +160,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             if (sub.equals("claim") || sub.equals("preview")) {
                 return matching(kitNames(), args[1]);
             }
-            if (owner && (sub.equals("edit") || sub.equals("replace") || sub.equals("delete") || sub.equals("give"))) {
+            if (owner && (sub.equals("edit") || sub.equals("replace") || sub.equals("remove") || sub.equals("delete") || sub.equals("give"))) {
                 return matching(kitNames(), args[1]);
             }
             return List.of();
@@ -295,14 +295,14 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return true;
         }
 
-        if (sub.equals("delete")) {
+        if (sub.equals("delete") || sub.equals("remove")) {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("Only players can delete kits.");
                 return true;
             }
             if (!requireOwner(player)) return true;
             if (args.length < 2) {
-                player.sendMessage(colored("&cUsage: /kit delete <name>"));
+                player.sendMessage(colored("&cUsage: /kit " + (sub.equals("remove") ? "remove" : "delete") + " <kit>"));
                 return true;
             }
             deleteKit(player, args[1]);
@@ -372,7 +372,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return true;
         }
 
-        sender.sendMessage(colored("&7Kit commands: &f/kit help, /kit open, /kit <kit>, /kit claim <kit>, /kit preview <kit>, /kit create <name>, /kit edit <name>, /kit replace <kit>, /kit delete <kit>, /kit give <kit> <player>, /kit reload"));
+        sender.sendMessage(colored("&7Kit commands: &f/kit help, /kit open, /kit <kit>, /kit claim <kit>, /kit preview <kit>, /kit create <name>, /kit edit <kit>, /kit replace <kit>, /kit remove <kit> (&7alias: /kit delete <kit>&f), /kit give <kit> <player>, /kit reload"));
         return true;
     }
 
@@ -389,7 +389,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             sender.sendMessage(colored("&8&m---------------- &eOwner Commands &8&m----------------"));
             sender.sendMessage(colored("&b/kit create <name> &7- Create a kit from your inventory"));
             sender.sendMessage(colored("&b/kit edit <name> &7- Edit a kit's item contents"));
-            sender.sendMessage(colored("&b/kit delete <name> &7- Delete a kit"));
+            sender.sendMessage(colored("&b/kit remove <kit> &7- Remove a kit (alias: /kit delete <kit>)"));
             sender.sendMessage(colored("&b/kit give <kit> <player> &7- Give a kit to a player"));
             sender.sendMessage(colored("&b/kit replace <kit> &7- Replace kit items with your inventory, armor, and off-hand"));
             sender.sendMessage(colored("&b/kit verify &7- Check kit item files"));

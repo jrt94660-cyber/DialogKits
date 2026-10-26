@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.taho</groupId>
     <artifactId>DialogKits</artifactId>
-    <version>1.2.5</version>
+    <version>1.2.6</version>
     <packaging>jar</packaging>
     <name>DialogKits</name>
     <description>Standalone kit management with native Java dialogs, Bedrock GUI, and PlayerKits2 migration.</description>
