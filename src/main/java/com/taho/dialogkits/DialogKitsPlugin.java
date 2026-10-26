@@ -33,15 +33,10 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
-import java.util.OptionalInt;
 import java.util.UUID;
 
 public final class DialogKitsPlugin extends JavaPlugin implements Listener, CommandExecutor {
@@ -195,23 +190,19 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
     }
 
     private void openNativeKitDialog(Player player) {
-        List<?> kits = getKits();
-        if (kits != null) {
-            if (getConfig().getBoolean("rank-order.enabled", true)) {
-                kits = sortKitsByLuckPermsWeight(kits);
-            }
-            // Explicit admin positions always override LuckPerms sorting.
-            kits = applyManualKitOrder(kits);
-        }
-        if (kits == null) {
+        List<?> allKits = getKits();
+        if (allKits == null) {
             showNotice(
                     player,
-                    getConfig().getString("ui.title", "&8Kits"),
+                    getConfig().getString("ui.title", "&8Player Kits"),
                     getConfig().getString("messages.playerkits-missing", "&cPlayerKits2 is not installed or is not ready.")
             );
             return;
         }
 
+        // Only kits that an admin has explicitly assigned to a manual slot are
+        // displayed. LuckPerms weights are not consulted for this menu.
+        List<?> kits = getManuallyAssignedKits(allKits);
         List<ActionButton> buttons = new ArrayList<>();
         for (Object kit : kits) {
             String kitId = stringValue(invoke(kit, "getName"));
@@ -244,22 +235,20 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             ));
         }
 
-        if (buttons.isEmpty()) {
-            showNotice(
-                    player,
-                    getConfig().getString("ui.title", "&8Kits"),
-                    getConfig().getString("messages.no-kits", "&7There are no kits configured in PlayerKits2.")
-            );
-            return;
-        }
-
-        List<DialogBody> body = List.of(DialogBody.plainMessage(
-                color(getConfig().getString("ui.description", "&7Choose an action for each kit. Ready is green, Claimed is yellow, Locked is red.")),
-                340
+        // Add this once per menu build, regardless of how many kits are assigned.
+        buttons.add(button(
+                color(getConfig().getString("ui.add-kit-button", "&aAdd Kit")),
+                "/dialogkitsadmin edit",
+                color("&7Open the admin editor to add a kit and choose its position.")
         ));
 
+        String description = kits.isEmpty()
+                ? getConfig().getString("ui.empty-description", "&7No kits have been added yet. Click &aAdd Kit &7to set up the kit list.")
+                : getConfig().getString("ui.description", "&7Choose an action for each kit. Ready is green, Claimed is yellow, Locked is red.");
+
+        List<DialogBody> body = List.of(DialogBody.plainMessage(color(description), 340));
         Dialog dialog = Dialog.create(builder -> builder.empty()
-                .base(DialogBase.builder(color(getConfig().getString("ui.title", "&8Kits")))
+                .base(DialogBase.builder(color(getConfig().getString("ui.title", "&8Player Kits")))
                         .canCloseWithEscape(true)
                         .pause(false)
                         .body(body)
@@ -628,8 +617,13 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         try {
             player.showDialog(dialog);
         } catch (Throwable error) {
-            getLogger().warning("Could not show a native dialog to " + player.getName() + ": " + error.getMessage());
-            player.performCommand("kit");
+            getLogger().warning("Could not show a DialogKits native dialog to " + player.getName() + ": " + error.getMessage());
+            player.sendMessage(color(getConfig().getString(
+                    "messages.dialog-failed",
+                    "&cCould not open the native kit dialog. Check the server console for details."
+            )));
+            // Do not execute /kit as a fallback: that can invoke another plugin's
+            // menu or interfere with a separate native dialog (for example, auth UI).
         }
     }
 
@@ -675,6 +669,32 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         Object config = invoke(mainConfig, "getConfig");
         Object value = invokeWithArgument(config, "getBoolean", "claim_kit_short_command");
         return value instanceof Boolean bool && bool;
+    }
+
+    private List<?> getManuallyAssignedKits(List<?> kits) {
+        if (kits == null || kits.isEmpty()) {
+            return List.of();
+        }
+
+        List<ManualKitOrderEntry> entries = new ArrayList<>();
+        int originalIndex = 0;
+        for (Object kit : kits) {
+            String kitId = stringValue(invoke(kit, "getName"));
+            int slot = kitId == null ? 0 : getAssignedSlot(kitId);
+            if (slot >= 1 && slot <= 50) {
+                entries.add(new ManualKitOrderEntry(kit, slot, originalIndex));
+            }
+            originalIndex++;
+        }
+
+        entries.sort(Comparator.comparingInt(ManualKitOrderEntry::slot)
+                .thenComparingInt(ManualKitOrderEntry::originalIndex));
+
+        List<Object> result = new ArrayList<>(entries.size());
+        for (ManualKitOrderEntry entry : entries) {
+            result.add(entry.kit());
+        }
+        return result;
     }
 
     private List<?> getKits() {
@@ -897,50 +917,6 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         }
     }
 
-    private List<?> applyManualKitOrder(List<?> sortedKits) {
-        if (sortedKits == null || sortedKits.size() < 2 || adminOrderData == null) {
-            return sortedKits;
-        }
-
-        int size = sortedKits.size();
-        List<Object> positioned = new ArrayList<>(Collections.nCopies(size, null));
-        List<Object> remaining = new ArrayList<>();
-
-        for (Object kit : sortedKits) {
-            String kitId = stringValue(invoke(kit, "getName"));
-            int assignedSlot = kitId == null ? 0 : getAssignedSlot(kitId);
-            if (assignedSlot < 1 || assignedSlot > 50) {
-                remaining.add(kit);
-                continue;
-            }
-
-            // If there are fewer configured kits than the selected slot number,
-            // place it at the last available position until more kits are added.
-            int targetIndex = Math.min(assignedSlot, size) - 1;
-            if (positioned.get(targetIndex) == null) {
-                positioned.set(targetIndex, kit);
-            } else {
-                remaining.add(kit);
-            }
-        }
-
-        int nextRemaining = 0;
-        List<Object> result = new ArrayList<>(size);
-        for (int index = 0; index < size; index++) {
-            Object kit = positioned.get(index);
-            if (kit == null && nextRemaining < remaining.size()) {
-                kit = remaining.get(nextRemaining++);
-            }
-            if (kit != null) {
-                result.add(kit);
-            }
-        }
-        while (nextRemaining < remaining.size()) {
-            result.add(remaining.get(nextRemaining++));
-        }
-        return result;
-    }
-
     private int getAssignedSlot(String kitId) {
         if (adminOrderData == null || kitId == null) {
             return 0;
@@ -978,148 +954,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         }
     }
 
-    /**
-     * Sort the native kit dialog by LuckPerms group weights.
-     *
-     * Lower-weight rank kits appear first, and higher-weight rank kits appear
-     * farther down. A kit is associated with a rank first by matching its ID to
-     * a LuckPerms group name, then by matching the kit's required permission to
-     * a permission node assigned directly to a weighted group.
-     *
-     * LuckPerms is optional and accessed reflectively so DialogKits does not
-     * require LuckPerms at compile time. If the API is unavailable, original
-     * PlayerKits2 order is preserved.
-     */
-    private List<?> sortKitsByLuckPermsWeight(List<?> kits) {
-        if (kits == null || kits.size() < 2) {
-            return kits;
-        }
-
-        Map<String, Integer> weightsByGroupName = new HashMap<>();
-        Map<String, Integer> weightsByPermission = new HashMap<>();
-
-        // Rank weights are optional: even without LuckPerms, kits which do not
-        // require a permission should still appear above permission-based kits.
-        Plugin luckPermsPlugin = Bukkit.getPluginManager().getPlugin("LuckPerms");
-        if (luckPermsPlugin != null && luckPermsPlugin.isEnabled()) {
-            Object luckPerms = getLuckPermsApi(luckPermsPlugin);
-            Object groupManager = invoke(luckPerms, "getGroupManager");
-            Object loadedGroupsValue = invoke(groupManager, "getLoadedGroups");
-            if (loadedGroupsValue instanceof Collection<?> groups) {
-                for (Object group : groups) {
-                    String groupName = stringValue(invoke(group, "getName"));
-                    Integer weight = luckPermsWeight(group);
-                    if (groupName == null || weight == null) {
-                        continue;
-                    }
-
-                    weightsByGroupName.merge(normalizeRankName(groupName), weight, Math::min);
-                    Object nodesValue = invoke(group, "getNodes");
-                    if (!(nodesValue instanceof Collection<?> nodes)) {
-                        continue;
-                    }
-
-                    for (Object node : nodes) {
-                        String permission = stringValue(invoke(node, "getKey"));
-                        Object value = invoke(node, "getValue");
-                        if (permission == null || !Boolean.TRUE.equals(value)) {
-                            continue;
-                        }
-                        weightsByPermission.merge(permission.toLowerCase(Locale.ROOT), weight, Math::min);
-                    }
-                }
-            }
-        }
-
-        List<KitOrderEntry> ordered = new ArrayList<>(kits.size());
-        int originalIndex = 0;
-        for (Object kit : kits) {
-            String kitName = stringValue(invoke(kit, "getName"));
-            boolean permissionRequired = Boolean.TRUE.equals(invoke(kit, "isPermissionRequired"));
-            Integer weight = kitName == null
-                    ? null
-                    : weightsByGroupName.get(normalizeRankName(kitName));
-
-            if (weight == null && kitName != null && permissionRequired) {
-                String customPermission = stringValue(invoke(kit, "getCustomPermission"));
-                String requiredPermission = customPermission != null && !customPermission.isBlank()
-                        ? customPermission
-                        : "playerkits.kit." + kitName;
-
-                String expected = requiredPermission.toLowerCase(Locale.ROOT);
-                for (Map.Entry<String, Integer> entry : weightsByPermission.entrySet()) {
-                    if (permissionNodeMatches(expected, entry.getKey())
-                            && (weight == null || entry.getValue() < weight)) {
-                        weight = entry.getValue();
-                    }
-                }
-            }
-
-            ordered.add(new KitOrderEntry(kit, weight, permissionRequired, originalIndex++));
-        }
-
-        boolean unmatchedLast = getConfig().getBoolean("rank-order.unmatched-kits-last", true);
-        Comparator<KitOrderEntry> comparator = Comparator
-                // Kits without a permission requirement always come first.
-                .comparingInt((KitOrderEntry entry) -> entry.permissionRequired() ? 1 : 0)
-                // Keep permission-free kits in their original order. Order the
-                // remaining kits from lowest to highest LuckPerms weight.
-                .thenComparingInt(entry -> !entry.permissionRequired()
-                        ? 0
-                        : entry.weight() == null
-                        ? (unmatchedLast ? Integer.MAX_VALUE : Integer.MIN_VALUE)
-                        : entry.weight())
-                .thenComparingInt(KitOrderEntry::originalIndex);
-        ordered.sort(comparator);
-
-        List<Object> result = new ArrayList<>(ordered.size());
-        for (KitOrderEntry entry : ordered) {
-            result.add(entry.kit());
-        }
-        return result;
-    }
-
-    private Object getLuckPermsApi(Plugin luckPermsPlugin) {
-        try {
-            Class<?> providerClass = Class.forName(
-                    "net.luckperms.api.LuckPermsProvider",
-                    true,
-                    luckPermsPlugin.getClass().getClassLoader()
-            );
-            return providerClass.getMethod("get").invoke(null);
-        } catch (ReflectiveOperationException | LinkageError exception) {
-            getLogger().fine("LuckPerms API could not be accessed for kit sorting: " + exception.getMessage());
-            return null;
-        }
-    }
-
-    private Integer luckPermsWeight(Object group) {
-        Object value = invoke(group, "getWeight");
-        if (value instanceof OptionalInt optionalInt) {
-            return optionalInt.isPresent() ? optionalInt.getAsInt() : null;
-        }
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        return null;
-    }
-
-    private boolean permissionNodeMatches(String requiredPermission, String assignedNode) {
-        if (assignedNode.equals("*") || assignedNode.equalsIgnoreCase(requiredPermission)) {
-            return true;
-        }
-        if (assignedNode.endsWith(".*")) {
-            String prefix = assignedNode.substring(0, assignedNode.length() - 1);
-            return requiredPermission.startsWith(prefix);
-        }
-        return false;
-    }
-
-    private String normalizeRankName(String name) {
-        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-    }
-
-    private record KitOrderEntry(Object kit, Integer weight, boolean permissionRequired, int originalIndex) {
+    private record ManualKitOrderEntry(Object kit, int slot, int originalIndex) {
     }
 
     private Object findKit(String kitId) {
