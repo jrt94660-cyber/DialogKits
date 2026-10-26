@@ -32,10 +32,15 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.UUID;
 
 public final class DialogKitsPlugin extends JavaPlugin implements Listener, CommandExecutor {
@@ -180,6 +185,9 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
     private void openNativeKitDialog(Player player) {
         List<?> kits = getKits();
+        if (kits != null && getConfig().getBoolean("rank-order.enabled", true)) {
+            kits = sortKitsByLuckPermsWeight(kits);
+        }
         if (kits == null) {
             showNotice(
                     player,
@@ -662,6 +670,152 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         Object kitsManager = invoke(plugin, "getKitsManager");
         List<?> kits = listValue(invoke(kitsManager, "getKits"));
         return kits == null ? Collections.emptyList() : kits;
+    }
+
+    /**
+     * Sort the native kit dialog by LuckPerms group weights.
+     *
+     * Lower-weight rank kits appear first, and higher-weight rank kits appear
+     * farther down. A kit is associated with a rank first by matching its ID to
+     * a LuckPerms group name, then by matching the kit's required permission to
+     * a permission node assigned directly to a weighted group.
+     *
+     * LuckPerms is optional and accessed reflectively so DialogKits does not
+     * require LuckPerms at compile time. If the API is unavailable, original
+     * PlayerKits2 order is preserved.
+     */
+    private List<?> sortKitsByLuckPermsWeight(List<?> kits) {
+        if (kits == null || kits.size() < 2) {
+            return kits;
+        }
+
+        Plugin luckPermsPlugin = Bukkit.getPluginManager().getPlugin("LuckPerms");
+        if (luckPermsPlugin == null || !luckPermsPlugin.isEnabled()) {
+            return kits;
+        }
+
+        Object luckPerms = getLuckPermsApi(luckPermsPlugin);
+        Object groupManager = invoke(luckPerms, "getGroupManager");
+        Object loadedGroupsValue = invoke(groupManager, "getLoadedGroups");
+        if (!(loadedGroupsValue instanceof Collection<?> groups) || groups.isEmpty()) {
+            return kits;
+        }
+
+        Map<String, Integer> weightsByGroupName = new HashMap<>();
+        Map<String, Integer> weightsByPermission = new HashMap<>();
+
+        for (Object group : groups) {
+            String groupName = stringValue(invoke(group, "getName"));
+            Integer weight = luckPermsWeight(group);
+            if (groupName == null || weight == null) {
+                continue;
+            }
+
+            weightsByGroupName.merge(normalizeRankName(groupName), weight, Math::min);
+            Object nodesValue = invoke(group, "getNodes");
+            if (!(nodesValue instanceof Collection<?> nodes)) {
+                continue;
+            }
+
+            for (Object node : nodes) {
+                String permission = stringValue(invoke(node, "getKey"));
+                Object value = invoke(node, "getValue");
+                if (permission == null || !Boolean.TRUE.equals(value)) {
+                    continue;
+                }
+                weightsByPermission.merge(permission.toLowerCase(Locale.ROOT), weight, Math::min);
+            }
+        }
+
+        if (weightsByGroupName.isEmpty()) {
+            return kits;
+        }
+
+        List<KitOrderEntry> ordered = new ArrayList<>(kits.size());
+        int originalIndex = 0;
+        for (Object kit : kits) {
+            String kitName = stringValue(invoke(kit, "getName"));
+            Integer weight = kitName == null
+                    ? null
+                    : weightsByGroupName.get(normalizeRankName(kitName));
+
+            if (weight == null && kitName != null) {
+                String customPermission = stringValue(invoke(kit, "getCustomPermission"));
+                boolean permissionRequired = Boolean.TRUE.equals(invoke(kit, "isPermissionRequired"));
+                String requiredPermission = customPermission != null && !customPermission.isBlank()
+                        ? customPermission
+                        : permissionRequired ? "playerkits.kit." + kitName : null;
+
+                if (requiredPermission != null) {
+                    String expected = requiredPermission.toLowerCase(Locale.ROOT);
+                    for (Map.Entry<String, Integer> entry : weightsByPermission.entrySet()) {
+                        if (permissionNodeMatches(expected, entry.getKey())
+                                && (weight == null || entry.getValue() < weight)) {
+                            weight = entry.getValue();
+                        }
+                    }
+                }
+            }
+
+            ordered.add(new KitOrderEntry(kit, weight, originalIndex++));
+        }
+
+        boolean unmatchedLast = getConfig().getBoolean("rank-order.unmatched-kits-last", true);
+        Comparator<KitOrderEntry> comparator = Comparator
+                .comparingInt((KitOrderEntry entry) -> entry.weight() == null
+                        ? (unmatchedLast ? Integer.MAX_VALUE : Integer.MIN_VALUE)
+                        : entry.weight())
+                .thenComparingInt(KitOrderEntry::originalIndex);
+        ordered.sort(comparator);
+
+        List<Object> result = new ArrayList<>(ordered.size());
+        for (KitOrderEntry entry : ordered) {
+            result.add(entry.kit());
+        }
+        return result;
+    }
+
+    private Object getLuckPermsApi(Plugin luckPermsPlugin) {
+        try {
+            Class<?> providerClass = Class.forName(
+                    "net.luckperms.api.LuckPermsProvider",
+                    true,
+                    luckPermsPlugin.getClass().getClassLoader()
+            );
+            return providerClass.getMethod("get").invoke(null);
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            getLogger().fine("LuckPerms API could not be accessed for kit sorting: " + exception.getMessage());
+            return null;
+        }
+    }
+
+    private Integer luckPermsWeight(Object group) {
+        Object value = invoke(group, "getWeight");
+        if (value instanceof OptionalInt optionalInt) {
+            return optionalInt.isPresent() ? optionalInt.getAsInt() : null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return null;
+    }
+
+    private boolean permissionNodeMatches(String requiredPermission, String assignedNode) {
+        if (assignedNode.equals("*") || assignedNode.equalsIgnoreCase(requiredPermission)) {
+            return true;
+        }
+        if (assignedNode.endsWith(".*")) {
+            String prefix = assignedNode.substring(0, assignedNode.length() - 1);
+            return requiredPermission.startsWith(prefix);
+        }
+        return false;
+    }
+
+    private String normalizeRankName(String name) {
+        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    }
+
+    private record KitOrderEntry(Object kit, Integer weight, int originalIndex) {
     }
 
     private Object findKit(String kitId) {
