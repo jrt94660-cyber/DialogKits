@@ -1,6 +1,6 @@
 # DialogKits
 
-**Current version: 1.0.7**
+**Current version: 1.0.8**
 
 DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
 
@@ -37,6 +37,7 @@ DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.
 - `/dialogkits claim <kit>` — claims via PlayerKits2 and refreshes the Ready/Claimed state.
 - `/dialogkits preview <kit>` — opens the native preview dialog.
 - `/dialogkits reload` — reloads DialogKits configuration (OP by default).
+- `/dialogkitsadmin edit` — opens a native admin dialog listing all kits. Select a kit, then choose Slot 1–50 to set its manual position. Manual slot assignments are saved in `plugins/DialogKits/kit-order.yml` and take priority over LuckPerms weight. If a slot is already occupied, its current kit is moved to the selected kit's previous manual slot when applicable, otherwise it returns to automatic ordering.
 
 Other PlayerKits2 administrative commands remain available.
 
