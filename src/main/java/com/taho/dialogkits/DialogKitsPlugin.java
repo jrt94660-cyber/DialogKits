@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -47,6 +48,8 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
     private File claimedDataFile;
     private YamlConfiguration claimedData;
+    private File adminOrderFile;
+    private YamlConfiguration adminOrderData;
 
     @Override
     public void onEnable() {
@@ -56,6 +59,11 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         if (command != null) {
             command.setExecutor(this);
         }
+        PluginCommand adminCommand = getCommand("dialogkitsadmin");
+        if (adminCommand != null) {
+            adminCommand.setExecutor(this);
+        }
+        loadAdminOrderData();
         Bukkit.getPluginManager().registerEvents(this, this);
 
         if (getPlayerKitsPlugin() == null) {
@@ -67,6 +75,9 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("dialogkitsadmin")) {
+            return handleAdminCommand(sender, args);
+        }
         if (!(sender instanceof Player player)) {
             if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
                 reloadConfig();
@@ -185,8 +196,12 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
     private void openNativeKitDialog(Player player) {
         List<?> kits = getKits();
-        if (kits != null && getConfig().getBoolean("rank-order.enabled", true)) {
-            kits = sortKitsByLuckPermsWeight(kits);
+        if (kits != null) {
+            if (getConfig().getBoolean("rank-order.enabled", true)) {
+                kits = sortKitsByLuckPermsWeight(kits);
+            }
+            // Explicit admin positions always override LuckPerms sorting.
+            kits = applyManualKitOrder(kits);
         }
         if (kits == null) {
             showNotice(
@@ -670,6 +685,296 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         Object kitsManager = invoke(plugin, "getKitsManager");
         List<?> kits = listValue(invoke(kitsManager, "getKits"));
         return kits == null ? Collections.emptyList() : kits;
+    }
+
+    private boolean handleAdminCommand(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("This command opens a native dialog and must be used in-game.");
+            return true;
+        }
+        if (!player.hasPermission("dialogkits.admin")) {
+            player.sendMessage(color(getConfig().getString("messages.no-permission", "&cYou do not have permission to do that.")));
+            return true;
+        }
+
+        if (args.length == 0 || args[0].equalsIgnoreCase("edit")) {
+            openAdminKitSelection(player);
+            return true;
+        }
+        if (args[0].equalsIgnoreCase("choose") && args.length >= 2) {
+            String kitId = decodeKitId(args[1]);
+            if (kitId == null || findKit(kitId) == null) {
+                player.sendMessage(color("&cThat kit no longer exists."));
+                openAdminKitSelection(player);
+                return true;
+            }
+            openAdminSlotSelection(player, kitId);
+            return true;
+        }
+        if (args[0].equalsIgnoreCase("assign") && args.length >= 3) {
+            String kitId = decodeKitId(args[1]);
+            int slot;
+            try {
+                slot = Integer.parseInt(args[2]);
+            } catch (NumberFormatException exception) {
+                player.sendMessage(color("&cThat slot number is invalid."));
+                return true;
+            }
+            assignKitToSlot(player, kitId, slot);
+            return true;
+        }
+        if (args[0].equalsIgnoreCase("close") || args[0].equalsIgnoreCase("noop")) {
+            return true;
+        }
+
+        player.sendMessage(color("&7Usage: &f/dialogkitsadmin edit"));
+        return true;
+    }
+
+    private void openAdminKitSelection(Player player) {
+        List<?> kits = getKits();
+        if (kits == null || kits.isEmpty()) {
+            showNotice(player, "&8DialogKits Admin", getConfig().getString(
+                    "messages.no-kits", "&7There are no kits configured in PlayerKits2."
+            ));
+            return;
+        }
+
+        List<ActionButton> buttons = new ArrayList<>();
+        for (Object kit : kits) {
+            String kitId = stringValue(invoke(kit, "getName"));
+            if (kitId == null || kitId.isBlank()) {
+                continue;
+            }
+
+            int assignedSlot = getAssignedSlot(kitId);
+            String label = "&f" + getKitDisplayName(kit, kitId)
+                    + (assignedSlot > 0 ? " &8(Slot " + assignedSlot + ")" : "");
+            buttons.add(button(
+                    color(label),
+                    "/dialogkitsadmin choose " + encodeKitId(kitId),
+                    color("&7Select this kit to set its position in the kit dialog.")
+            ));
+        }
+
+        if (buttons.isEmpty()) {
+            showNotice(player, "&8DialogKits Admin", getConfig().getString(
+                    "messages.no-kits", "&7There are no kits configured in PlayerKits2."
+            ));
+            return;
+        }
+
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(color("&8DialogKits Admin"))
+                        .canCloseWithEscape(true)
+                        .pause(false)
+                        .body(List.of(DialogBody.plainMessage(
+                                color("&7Choose the kit you want to position. Manual slots override LuckPerms weight."),
+                                340
+                        )))
+                        .build())
+                .type(DialogType.multiAction(buttons, null, 2))
+        );
+        showDialogOrFallback(player, dialog);
+    }
+
+    private void openAdminSlotSelection(Player player, String kitId) {
+        Object kit = findKit(kitId);
+        if (kit == null) {
+            player.sendMessage(color("&cThat kit no longer exists."));
+            openAdminKitSelection(player);
+            return;
+        }
+
+        int currentSlot = getAssignedSlot(kitId);
+        List<ActionButton> buttons = new ArrayList<>(50);
+        for (int slot = 1; slot <= 50; slot++) {
+            String occupant = getKitAssignedToSlot(slot);
+            String label;
+            if (slot == currentSlot) {
+                label = "&aSlot " + slot + " &8(Current)";
+            } else if (occupant != null && !occupant.equals(kitId)) {
+                Object occupyingKit = findKit(occupant);
+                String occupantName = occupyingKit == null ? occupant : getKitDisplayName(occupyingKit, occupant);
+                label = "&eSlot " + slot + " &8(" + occupantName + ")";
+            } else {
+                label = "&fSlot " + slot;
+            }
+
+            buttons.add(adminSlotButton(
+                    color(label),
+                    "/dialogkitsadmin assign " + encodeKitId(kitId) + " " + slot,
+                    color("&7Place &f" + getKitDisplayName(kit, kitId) + " &7at position " + slot + ".")
+            ));
+        }
+
+        String description = "&7Choose a slot from 1 to 50 for &f" + getKitDisplayName(kit, kitId) + "&7."
+                + "\n&8Manual positions take priority over LuckPerms group weights.";
+        if (currentSlot > 0) {
+            description += "\n&aCurrent position: " + currentSlot;
+        }
+
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(color("&8Edit Kit Position"))
+                        .canCloseWithEscape(true)
+                        .pause(false)
+                        .body(List.of(DialogBody.plainMessage(color(description), 380)))
+                        .build())
+                .type(DialogType.multiAction(buttons, null, 3))
+        );
+        showDialogOrFallback(player, dialog);
+    }
+
+    private ActionButton adminSlotButton(Component label, String command, Component tooltip) {
+        return ActionButton.builder(label)
+                .width(120)
+                .tooltip(tooltip)
+                .action(DialogAction.staticAction(ClickEvent.runCommand(command)))
+                .build();
+    }
+
+    private void assignKitToSlot(Player player, String kitId, int slot) {
+        if (kitId == null || findKit(kitId) == null) {
+            player.sendMessage(color("&cThat kit no longer exists."));
+            openAdminKitSelection(player);
+            return;
+        }
+        if (slot < 1 || slot > 50) {
+            player.sendMessage(color("&cChoose a slot between 1 and 50."));
+            openAdminSlotSelection(player, kitId);
+            return;
+        }
+
+        if (adminOrderData == null) {
+            loadAdminOrderData();
+        }
+        String selectedKey = encodeKitId(kitId);
+        int oldSlot = getAssignedSlot(kitId);
+
+        // Keep manual slots unique. If both kits already had manual positions,
+        // swap them; otherwise the old occupant returns to automatic rank order.
+        String occupantKey = findOrderKeyForSlot(slot);
+        if (occupantKey != null && !occupantKey.equals(selectedKey)) {
+            if (oldSlot > 0) {
+                adminOrderData.set("slots." + occupantKey, oldSlot);
+            } else {
+                adminOrderData.set("slots." + occupantKey, null);
+            }
+        }
+        adminOrderData.set("slots." + selectedKey, slot);
+        saveAdminOrderData();
+
+        player.sendMessage(color("&aSet &f" + kitId + " &ato slot &f" + slot + "&a."));
+        openAdminSlotSelection(player, kitId);
+    }
+
+    private void loadAdminOrderData() {
+        if (!getDataFolder().exists() && !getDataFolder().mkdirs()) {
+            getLogger().warning("Could not create DialogKits data folder; manual kit ordering may not persist.");
+        }
+        adminOrderFile = new File(getDataFolder(), "kit-order.yml");
+        if (!adminOrderFile.exists()) {
+            try {
+                if (!adminOrderFile.createNewFile()) {
+                    getLogger().warning("Could not create kit-order.yml.");
+                }
+            } catch (IOException exception) {
+                getLogger().warning("Could not create kit-order.yml: " + exception.getMessage());
+            }
+        }
+        adminOrderData = YamlConfiguration.loadConfiguration(adminOrderFile);
+    }
+
+    private void saveAdminOrderData() {
+        if (adminOrderData == null || adminOrderFile == null) {
+            return;
+        }
+        try {
+            adminOrderData.save(adminOrderFile);
+        } catch (IOException exception) {
+            getLogger().warning("Could not save kit-order.yml: " + exception.getMessage());
+        }
+    }
+
+    private List<?> applyManualKitOrder(List<?> sortedKits) {
+        if (sortedKits == null || sortedKits.size() < 2 || adminOrderData == null) {
+            return sortedKits;
+        }
+
+        int size = sortedKits.size();
+        List<Object> positioned = new ArrayList<>(Collections.nCopies(size, null));
+        List<Object> remaining = new ArrayList<>();
+
+        for (Object kit : sortedKits) {
+            String kitId = stringValue(invoke(kit, "getName"));
+            int assignedSlot = kitId == null ? 0 : getAssignedSlot(kitId);
+            if (assignedSlot < 1 || assignedSlot > 50) {
+                remaining.add(kit);
+                continue;
+            }
+
+            // If there are fewer configured kits than the selected slot number,
+            // place it at the last available position until more kits are added.
+            int targetIndex = Math.min(assignedSlot, size) - 1;
+            if (positioned.get(targetIndex) == null) {
+                positioned.set(targetIndex, kit);
+            } else {
+                remaining.add(kit);
+            }
+        }
+
+        int nextRemaining = 0;
+        List<Object> result = new ArrayList<>(size);
+        for (int index = 0; index < size; index++) {
+            Object kit = positioned.get(index);
+            if (kit == null && nextRemaining < remaining.size()) {
+                kit = remaining.get(nextRemaining++);
+            }
+            if (kit != null) {
+                result.add(kit);
+            }
+        }
+        while (nextRemaining < remaining.size()) {
+            result.add(remaining.get(nextRemaining++));
+        }
+        return result;
+    }
+
+    private int getAssignedSlot(String kitId) {
+        if (adminOrderData == null || kitId == null) {
+            return 0;
+        }
+        return adminOrderData.getInt("slots." + encodeKitId(kitId), 0);
+    }
+
+    private String getKitAssignedToSlot(int slot) {
+        String key = findOrderKeyForSlot(slot);
+        return key == null ? null : decodeKitId(key);
+    }
+
+    private String findOrderKeyForSlot(int slot) {
+        if (adminOrderData == null || adminOrderData.getConfigurationSection("slots") == null) {
+            return null;
+        }
+        for (String key : adminOrderData.getConfigurationSection("slots").getKeys(false)) {
+            if (adminOrderData.getInt("slots." + key, 0) == slot) {
+                return key;
+            }
+        }
+        return null;
+    }
+
+    private String encodeKitId(String kitId) {
+        return Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(kitId.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private String decodeKitId(String encoded) {
+        try {
+            return new String(Base64.getUrlDecoder().decode(encoded), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     /**
