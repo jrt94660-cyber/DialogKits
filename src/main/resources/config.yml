@@ -13,10 +13,7 @@ ui:
   ready-button: "&a%kit% &8| &aReady"
   claimed-button: "&e%kit% &8| &eClaimed"
   locked-button: "&c%kit% &8| &cLocked"
-
-  # A real Spyglass item is displayed alongside the Preview action.
   preview-button: "&bPreview"
-  preview-icon-description: "&7Use Preview to see the kit contents."
 
   preview-title: "&8Preview &7» &f%kit%"
   preview-claim-button: "&aClaim %kit%"
