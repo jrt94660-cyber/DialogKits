@@ -1,0 +1,494 @@
+package com.taho.dialogkits;
+
+import io.papermc.paper.dialog.Dialog;
+import io.papermc.paper.registry.data.dialog.ActionButton;
+import io.papermc.paper.registry.data.dialog.DialogBase;
+import io.papermc.paper.registry.data.dialog.action.DialogAction;
+import io.papermc.paper.registry.data.dialog.body.DialogBody;
+import io.papermc.paper.registry.data.dialog.type.DialogType;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.UUID;
+
+public final class DialogKitsPlugin extends JavaPlugin implements Listener, CommandExecutor {
+    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
+
+    @Override
+    public void onEnable() {
+        saveDefaultConfig();
+        PluginCommand command = getCommand("dialogkits");
+        if (command != null) {
+            command.setExecutor(this);
+        }
+        Bukkit.getPluginManager().registerEvents(this, this);
+
+        if (getPlayerKitsPlugin() == null) {
+            getLogger().warning("PlayerKits2 was not detected. DialogKits will wait for it, but kit dialogs cannot open until it is installed and enabled.");
+        } else {
+            getLogger().info("PlayerKits2 detected. Java players will use native kit dialogs.");
+        }
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player player)) {
+            if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+                reloadConfig();
+                sender.sendMessage("DialogKits configuration reloaded.");
+            } else {
+                sender.sendMessage("Usage: /dialogkits reload");
+            }
+            return true;
+        }
+
+        if (args.length == 0 || args[0].equalsIgnoreCase("open")) {
+            if (!player.hasPermission("dialogkits.open")) {
+                player.sendMessage(color(getConfig().getString("messages.no-permission", "&cYou do not have permission to open kits.")));
+                return true;
+            }
+            openFor(player);
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("preview")) {
+            if (args.length < 2) {
+                player.sendMessage(color(getConfig().getString("messages.preview-usage", "&cUsage: /dialogkits preview <kit>")));
+                return true;
+            }
+            openPreview(player, args[1]);
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("reload")) {
+            if (!player.hasPermission("dialogkits.reload")) {
+                player.sendMessage(color(getConfig().getString("messages.no-permission", "&cYou do not have permission to do that.")));
+                return true;
+            }
+            reloadConfig();
+            player.sendMessage(color(getConfig().getString("messages.reloaded", "&aDialogKits configuration reloaded.")));
+            return true;
+        }
+
+        player.sendMessage(color("&7Usage: &f/dialogkits [open|preview <kit>|reload]"));
+        return true;
+    }
+
+    /**
+     * Replaces only the bare /kit command. Commands such as /kit claim, /kit create,
+     * /kit edit and /kit preview are left to PlayerKits2.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
+        if (!getConfig().getBoolean("intercept-kit-command", true)) {
+            return;
+        }
+
+        String message = event.getMessage().trim();
+        if (!message.matches("(?i)^/(kit|kits|playerkits)$")) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+        if (isBedrockPlayer(player) && getConfig().getBoolean("bedrock-use-playerkits-gui", true)) {
+            return;
+        }
+
+        event.setCancelled(true);
+        openNativeKitDialog(player);
+    }
+
+    private void openFor(Player player) {
+        if (isBedrockPlayer(player) && getConfig().getBoolean("bedrock-use-playerkits-gui", true)) {
+            player.performCommand("kit");
+            return;
+        }
+        openNativeKitDialog(player);
+    }
+
+    private void openNativeKitDialog(Player player) {
+        List<?> kits = getKits();
+        if (kits == null) {
+            showNotice(
+                    player,
+                    getConfig().getString("ui.title", "&8Kits"),
+                    getConfig().getString("messages.playerkits-missing", "&cPlayerKits2 is not installed or is not ready.")
+            );
+            return;
+        }
+
+        List<ActionButton> buttons = new ArrayList<>();
+        for (Object kit : kits) {
+            String kitId = stringValue(invoke(kit, "getName"));
+            if (kitId == null || kitId.isBlank()) {
+                continue;
+            }
+            String displayName = getKitDisplayName(kit, kitId);
+
+            buttons.add(button(
+                    format(getConfig().getString("ui.claim-button", "&a%kit% &8| &fClaim"), displayName, kitId),
+                    getClaimCommand(kitId),
+                    color("&7Claim the &f" + displayName + "&7 kit.")
+            ));
+            buttons.add(button(
+                    format(getConfig().getString("ui.preview-button", "&b%kit% &8| &fPreview"), displayName, kitId),
+                    "/dialogkits preview " + kitId,
+                    color("&7View the items in &f" + displayName + "&7.")
+            ));
+        }
+
+        if (buttons.isEmpty()) {
+            showNotice(
+                    player,
+                    getConfig().getString("ui.title", "&8Kits"),
+                    getConfig().getString("messages.no-kits", "&7There are no kits configured in PlayerKits2.")
+            );
+            return;
+        }
+
+        List<DialogBody> body = List.of(DialogBody.plainMessage(
+                color(getConfig().getString("ui.description", "&7Choose a kit action. Each kit has a Claim and Preview button.")),
+                340
+        ));
+
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(color(getConfig().getString("ui.title", "&8Kits")))
+                        .canCloseWithEscape(true)
+                        .pause(false)
+                        .body(body)
+                        .build())
+                .type(DialogType.multiAction(buttons, null, 2))
+        );
+
+        showDialogOrFallback(player, dialog);
+    }
+
+    private void openPreview(Player player, String kitId) {
+        if (isBedrockPlayer(player) && getConfig().getBoolean("bedrock-use-playerkits-gui", true)) {
+            player.performCommand("kit preview " + kitId);
+            return;
+        }
+
+        Object kit = findKit(kitId);
+        if (kit == null) {
+            player.sendMessage(color(getConfig().getString("messages.kit-not-found", "&cThat kit does not exist in PlayerKits2.")));
+            openNativeKitDialog(player);
+            return;
+        }
+
+        String displayName = getKitDisplayName(kit, kitId);
+        List<DialogBody> body = new ArrayList<>();
+
+        Object displayItem = invoke(kit, "getDisplayItemDefault");
+        ItemStack icon = asItemStack(displayItem);
+        if (icon != null) {
+            body.add(DialogBody.item(icon, null, true, true, 32, 32));
+        }
+
+        List<?> kitItems = listValue(invoke(kit, "getItems"));
+        List<String> lines = new ArrayList<>();
+        int limit = Math.max(1, getConfig().getInt("ui.preview-list-limit", 14));
+        int total = 0;
+
+        if (kitItems != null) {
+            total = kitItems.size();
+            for (Object kitItem : kitItems) {
+                ItemStack item = asItemStack(kitItem);
+                if (item == null || item.getType().isAir()) {
+                    continue;
+                }
+                if (lines.size() >= limit) {
+                    continue;
+                }
+                lines.add("&f" + itemAmount(item) + " &7× &f" + itemLabel(item));
+            }
+        }
+
+        StringBuilder itemText = new StringBuilder();
+        itemText.append("&7Items included: &f").append(total);
+        if (lines.isEmpty()) {
+            itemText.append("\n&8No item preview data was available.");
+        } else {
+            for (String line : lines) {
+                itemText.append("\n").append(line);
+            }
+            long omitted = Math.max(0, total - lines.size());
+            if (omitted > 0) {
+                itemText.append("\n&8...and ").append(omitted).append(" more item entries.");
+            }
+        }
+        body.add(DialogBody.plainMessage(color(itemText.toString()), 340));
+
+        ActionButton claimButton = button(
+                format(getConfig().getString("ui.preview-claim-button", "&aClaim %kit%"), displayName, kitId),
+                getClaimCommand(kitId),
+                color("&7Claim this kit using PlayerKits2.")
+        );
+        ActionButton backButton = button(
+                color(getConfig().getString("ui.preview-back-button", "&7Back to Kits")),
+                "/dialogkits open",
+                color("&7Return to the kit list.")
+        );
+
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(format(getConfig().getString("ui.preview-title", "&8Preview &7» &f%kit%"), displayName, kitId))
+                        .canCloseWithEscape(true)
+                        .pause(false)
+                        .body(body)
+                        .build())
+                .type(DialogType.multiAction(List.of(claimButton, backButton), null, 2))
+        );
+
+        showDialogOrFallback(player, dialog);
+    }
+
+    private void showNotice(Player player, String title, String message) {
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(color(title))
+                        .canCloseWithEscape(true)
+                        .pause(false)
+                        .body(List.of(DialogBody.plainMessage(color(message), 340)))
+                        .build())
+                .type(DialogType.notice())
+        );
+        showDialogOrFallback(player, dialog);
+    }
+
+    private void showDialogOrFallback(Player player, Dialog dialog) {
+        try {
+            player.showDialog(dialog);
+        } catch (Throwable error) {
+            getLogger().warning("Could not show a native dialog to " + player.getName() + ": " + error.getMessage());
+            player.performCommand("kit");
+        }
+    }
+
+    private ActionButton button(Component label, String command, Component tooltip) {
+        return ActionButton.builder(label)
+                .width(220)
+                .tooltip(tooltip)
+                .action(DialogAction.staticAction(ClickEvent.runCommand(command)))
+                .build();
+    }
+
+    private Component format(String template, String displayName, String kitId) {
+        String text = Objects.requireNonNullElse(template, "%kit%")
+                .replace("%kit%", displayName)
+                .replace("%kit_id%", kitId)
+                .replace("%kit_name%", displayName);
+        return color(text);
+    }
+
+    private Component color(String text) {
+        return LEGACY.deserialize(Objects.requireNonNullElse(text, ""));
+    }
+
+    private String getKitDisplayName(Object kit, String kitId) {
+        if (getConfig().getBoolean("ui.use-kit-display-name", true)) {
+            Object displayItem = invoke(kit, "getDisplayItemDefault");
+            String configuredName = stringValue(invoke(displayItem, "getName"));
+            if (configuredName != null && !configuredName.isBlank()) {
+                String replacement = titleCase(kitId);
+                return configuredName
+                        .replace("%kit_name%", replacement)
+                        .replace("%kit%", kitId)
+                        .replace("%kit_name_upper%", kitId.toUpperCase(Locale.ROOT));
+            }
+        }
+        return titleCase(kitId);
+    }
+
+    private String getClaimCommand(String kitId) {
+        boolean shortCommand = isClaimShortCommandEnabled();
+        return shortCommand ? "/kit " + kitId : "/kit claim " + kitId;
+    }
+
+    private boolean isClaimShortCommandEnabled() {
+        Plugin plugin = getPlayerKitsPlugin();
+        Object configs = invoke(plugin, "getConfigsManager");
+        Object mainConfig = invoke(configs, "getMainConfigManager");
+        Object config = invoke(mainConfig, "getConfig");
+        Object value = invokeWithArgument(config, "getBoolean", "claim_kit_short_command");
+        return value instanceof Boolean bool && bool;
+    }
+
+    private List<?> getKits() {
+        Plugin plugin = getPlayerKitsPlugin();
+        if (plugin == null) {
+            return null;
+        }
+        Object kitsManager = invoke(plugin, "getKitsManager");
+        List<?> kits = listValue(invoke(kitsManager, "getKits"));
+        return kits == null ? Collections.emptyList() : kits;
+    }
+
+    private Object findKit(String kitId) {
+        List<?> kits = getKits();
+        if (kits == null) {
+            return null;
+        }
+        for (Object kit : kits) {
+            String name = stringValue(invoke(kit, "getName"));
+            if (kitId.equals(name)) {
+                return kit;
+            }
+        }
+        return null;
+    }
+
+    private Plugin getPlayerKitsPlugin() {
+        Plugin plugin = Bukkit.getPluginManager().getPlugin("PlayerKits2");
+        return plugin != null && plugin.isEnabled() ? plugin : null;
+    }
+
+    private boolean isBedrockPlayer(Player player) {
+        try {
+            Class<?> apiClass = Class.forName("org.geysermc.floodgate.api.FloodgateApi");
+            Object api = apiClass.getMethod("getInstance").invoke(null);
+            Method method = apiClass.getMethod("isFloodgatePlayer", UUID.class);
+            Object result = method.invoke(api, player.getUniqueId());
+            return result instanceof Boolean value && value;
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return false;
+        }
+    }
+
+    private ItemStack asItemStack(Object kitItem) {
+        if (kitItem == null) {
+            return null;
+        }
+
+        Object original = invoke(kitItem, "getOriginalItem");
+        if (original instanceof ItemStack itemStack) {
+            return itemStack.clone();
+        }
+
+        String id = stringValue(invoke(kitItem, "getId"));
+        if (id == null || id.isBlank()) {
+            return null;
+        }
+
+        Material material = Material.matchMaterial(id);
+        if (material == null && id.startsWith("minecraft:")) {
+            material = Material.matchMaterial(id.substring("minecraft:".length()));
+        }
+        if (material == null || material.isAir()) {
+            return null;
+        }
+
+        Object rawAmount = invoke(kitItem, "getAmount");
+        int amount = rawAmount instanceof Number number ? number.intValue() : 1;
+        ItemStack result = new ItemStack(material, Math.max(1, Math.min(Math.max(1, amount), 99)));
+
+        String customName = stringValue(invoke(kitItem, "getName"));
+        if (customName != null && !customName.isBlank()) {
+            ItemMeta meta = result.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', customName));
+                result.setItemMeta(meta);
+            }
+        }
+        return result;
+    }
+
+    private String itemLabel(ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null && meta.hasDisplayName()) {
+            String label = ChatColor.stripColor(meta.getDisplayName());
+            if (label != null && !label.isBlank()) {
+                return label;
+            }
+        }
+        String name = item.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        StringBuilder result = new StringBuilder();
+        for (String part : name.split(" ")) {
+            if (part.isBlank()) {
+                continue;
+            }
+            if (!result.isEmpty()) {
+                result.append(' ');
+            }
+            result.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+        }
+        return result.toString();
+    }
+
+    private int itemAmount(ItemStack item) {
+        return Math.max(1, item.getAmount());
+    }
+
+    private String titleCase(String input) {
+        String normalised = input.replace('_', ' ').replace('-', ' ').trim();
+        StringBuilder result = new StringBuilder();
+        boolean makeUpper = true;
+        for (char character : normalised.toCharArray()) {
+            if (Character.isWhitespace(character)) {
+                result.append(character);
+                makeUpper = true;
+            } else {
+                result.append(makeUpper ? Character.toUpperCase(character) : character);
+                makeUpper = false;
+            }
+        }
+        return result.toString();
+    }
+
+    private Object invoke(Object target, String methodName) {
+        if (target == null) {
+            return null;
+        }
+        try {
+            return target.getClass().getMethod(methodName).invoke(target);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private Object invokeWithArgument(Object target, String methodName, Object argument) {
+        if (target == null || argument == null) {
+            return null;
+        }
+        for (Method method : target.getClass().getMethods()) {
+            if (method.getName().equals(methodName) && method.getParameterCount() == 1
+                    && method.getParameterTypes()[0].isAssignableFrom(argument.getClass())) {
+                try {
+                    return method.invoke(target, argument);
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    private List<?> listValue(Object value) {
+        return value instanceof List<?> list ? list : null;
+    }
+
+    private String stringValue(Object value) {
+        return value instanceof String string ? string : null;
+    }
+}
