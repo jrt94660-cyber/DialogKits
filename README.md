@@ -1,6 +1,6 @@
 # DialogKits
 
-**Current version: 1.2.5 — standalone conversion**
+**Current version: 1.2.7 — OP-gated kit commands**
 
 DialogKits is now an independent kit plugin. It no longer needs PlayerKits2 at runtime or imports its Java classes. Its first-start importer reads the existing PlayerKits2 folder, copies compatible kit YAML files, imports supported settings, uses the old inventory layout to seed manual menu ordering, and migrates matching cooldown/claim history when kit names can be mapped. The original PlayerKits2 files are never changed or deleted.
 
@@ -11,7 +11,7 @@ DialogKits is now an independent kit plugin. It no longer needs PlayerKits2 at r
 - Independent plugins/DialogKits/kits/*.yml kit definitions and player-data.yml claim/cooldown storage.
 - Supports kit cooldowns, one-time kits, permission-gated kits, automatic armor placement, clear-inventory kits, inventory overflow/drop behavior, optional Vault economy prices, PlaceholderAPI expansion, simple extra requirements, claim/error actions, first-join kits, and player claim resets.
 - /kit create <name> creates a kit from the player's current inventory. /kit edit <name> opens a 54-slot item editor; changes save when the editor closes.
-- `/kit give <kit> <player>`, `/kit remove <kit>` (alias: `/kit delete <kit>`), `/kit replace <kit>`, `/kit preview <kit>`, `/kit verify`, and `/kit reload`. Use `/kit help` to see the commands in-game. `/kit replace <kit>` overwrites the kit's saved item list with your current storage inventory, armor, and off-hand while preserving the kit's settings.
+- `/kit create <name>`, `/kit remove <kit>` (alias: `/kit delete <kit>`), `/kit replace <kit>`, and `/kit reload` require actual Minecraft OP status; LuckPerms group membership or a granted permission cannot bypass these checks. `/kit replace <kit>` overwrites the kit's saved item list with your current storage inventory, armor, and off-hand while preserving the kit's settings. Other management commands include `/kit edit <kit>`, `/kit give <kit> <player>`, and `/kit verify`. Use `/kit help` to see the commands in-game.
 - The configured LuckPerms owner primary group (default: owner) can use /dialogkitsadmin edit to manually assign positions 1–50. The owner-only Add Kit button stays visible when the menu is empty.
 - Existing PlayerKits2 permission nodes playerkits.kit.<kit> are accepted alongside dialogkits.kit.<kit>.
 - Imported Bukkit/Paper item serialization is kept, preserving supported enchantments, item components, custom names, and lore.
@@ -36,7 +36,7 @@ DialogKits is now an independent kit plugin. It no longer needs PlayerKits2 at r
 
 1. Stop the server and back it up.
 2. Move the PlayerKits2 JAR out of the plugins folder, but leave plugins/PlayerKits2/ and all its files in place.
-3. Install DialogKits 1.2.5 and start the server. The importer reads the old folder and copies compatible data without changing it. Removing the JAR first prevents both plugins from competing for /kit.
+3. Install DialogKits 1.2.7 and start the server. The importer reads the old folder and copies compatible data without changing it. Removing the JAR first prevents both plugins from competing for /kit.
 4. Verify plugins/DialogKits/kits/, previews, menu ordering, permission nodes, cooldowns, and imported claim-data mappings.
 5. Keep plugins/PlayerKits2/ as a backup until you are satisfied, then edit only DialogKits. The two config.yml files and kit folders remain separate.
 
@@ -48,9 +48,9 @@ Requires Java 21+ and Maven:
 
     mvn clean package
 
-The versioned JAR is generated at `target/DialogKits-${project.version}.jar` (for example, `DialogKits-1.2.5.jar`). The embedded `plugin.yml` also carries the plugin version.
+The versioned JAR is generated at `target/DialogKits-${project.version}.jar` (for example, `DialogKits-1.2.7.jar`). The embedded `plugin.yml` also carries the plugin version.
 
 
 ## Command tab completion
 
-Version 1.2.4 provides tab completion for kit subcommands, kit names after `claim`, `preview`, `edit`, `replace`, and `delete`, online player names after `give`, and owner-only management commands. Typing `/kit ` suggests the available subcommands and direct kit names. Running bare `/kit` opens the kit menu; `/kit help` shows the command list.
+Version 1.2.7 provides OP-only tab suggestions for `/kit create`, `/kit remove`/`delete`, `/kit replace`, and `/kit reload`. Tab completion for `/kit edit`, `/kit give`, `/kit verify`, and `/dialogkitsadmin` follows the configured LuckPerms owner group. Typing `/kit ` suggests the available subcommands and direct kit names. Running bare `/kit` opens the kit menu; `/kit help` shows the command list.

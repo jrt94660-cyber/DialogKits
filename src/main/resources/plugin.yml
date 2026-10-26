@@ -1,5 +1,5 @@
 name: DialogKits
-version: 1.2.6
+version: 1.2.7
 main: com.taho.dialogkits.DialogKitsPlugin
 api-version: '1.21.11'
 description: Standalone kit management with native Java dialogs and a Bedrock chest GUI.
@@ -28,7 +28,7 @@ permissions:
     description: Allows opening the DialogKits menu.
     default: true
   dialogkits.reload:
-    description: Allows reloading DialogKits configuration.
+    description: OP-only reload permission; non-OP players are denied even if granted this permission.
     default: op
   dialogkits.admin:
     description: Legacy node; kit management remains restricted to the configured LuckPerms owner primary group.
