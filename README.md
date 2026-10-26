@@ -1,6 +1,6 @@
 # DialogKits
 
-**Current version: 1.0.9**
+**Current version: 1.1.0**
 
 DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
 
@@ -18,7 +18,8 @@ DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.
 - Kit names and kit data are read from PlayerKits2 at runtime; no duplicate kit config is required.
 - The Java kit dialog displays only kits that an admin has explicitly assigned to a manual slot (1–50). Unassigned kits remain hidden until assigned a slot.
 - Ready, Claimed, and Locked button labels and dialog titles are configurable in `config.yml`.
-- The main `/kit` and `/kits` dialog always includes exactly one **Add Kit** button, even after kits have been added. It opens `/dialogkitsadmin edit`.
+- The main `/kit` and `/kits` dialog shows the **Add Kit** button only to players whose LuckPerms primary group matches `admin.owner-group` (default: `owner`). It stays available after kits have been added and opens `/dialogkitsadmin edit`.
+- `/dialogkitsadmin edit` is checked against LuckPerms every time it is used; server operators who are not in the configured owner primary group cannot use it. If LuckPerms is unavailable or the player data cannot be read, access is denied.
 
 ## Compatibility
 
@@ -35,7 +36,7 @@ DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.
 - `/dialogkits claim <kit>` — claims via PlayerKits2 and refreshes the Ready/Claimed state.
 - `/dialogkits preview <kit>` — opens the native preview dialog.
 - `/dialogkits reload` — reloads DialogKits configuration (OP by default).
-- `/dialogkitsadmin edit` — opens a native admin dialog listing all PlayerKits2 kits. Select a kit, then choose Slot 1–50 to make it appear in that manual position. Manual positions are saved in `plugins/DialogKits/kit-order.yml`. If a slot is occupied, its kit swaps to the selected kit's previous slot if applicable; otherwise it becomes unassigned.
+- `/dialogkitsadmin edit` — for the configured LuckPerms owner group only. Opens a native admin dialog listing all PlayerKits2 kits. Select a kit, then choose Slot 1–50 to make it appear in that manual position. Manual positions are saved in `plugins/DialogKits/kit-order.yml`.
 
 Other PlayerKits2 administrative commands remain available.
 
