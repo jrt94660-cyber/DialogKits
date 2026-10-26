@@ -6,12 +6,16 @@ bedrock-use-playerkits-gui: true
 
 ui:
   title: "&8Player Kits"
-  description: "&7Choose a kit action. Each kit has a Claim and Preview button."
+  description: "&7Choose an action for each kit. Ready is green; claimed kits are red."
   use-kit-display-name: true
 
-  # Available placeholders: %kit% (display name), %kit_id% (PlayerKits2 internal ID), %kit_name%
-  claim-button: "&a%kit% &8| &fClaim"
-  preview-button: "&b%kit% &8| &fPreview"
+  # Kit button placeholders: %kit% (display name), %kit_id% (internal ID), %kit_name%.
+  ready-button: "&a%kit% &8| &aReady"
+  claimed-button: "&c%kit% &8| &cClaimed"
+  # Native dialog action buttons are text-only on the supported API, so a real Spyglass item
+  # is displayed in the dialog body and each Preview action is labelled simply "Preview".
+  preview-button: "&bPreview"
+  preview-icon-description: "&7Use Preview to see the kit contents."
 
   preview-title: "&8Preview &7» &f%kit%"
   preview-claim-button: "&aClaim %kit%"
