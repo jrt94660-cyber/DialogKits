@@ -1,6 +1,6 @@
 # DialogKits
 
-**Current version: 1.2.4 — standalone conversion**
+**Current version: 1.2.5 — standalone conversion**
 
 DialogKits is now an independent kit plugin. It no longer needs PlayerKits2 at runtime or imports its Java classes. Its first-start importer reads the existing PlayerKits2 folder, copies compatible kit YAML files, imports supported settings, uses the old inventory layout to seed manual menu ordering, and migrates matching cooldown/claim history when kit names can be mapped. The original PlayerKits2 files are never changed or deleted.
 
@@ -36,7 +36,7 @@ DialogKits is now an independent kit plugin. It no longer needs PlayerKits2 at r
 
 1. Stop the server and back it up.
 2. Move the PlayerKits2 JAR out of the plugins folder, but leave plugins/PlayerKits2/ and all its files in place.
-3. Install DialogKits 1.2.4 and start the server. The importer reads the old folder and copies compatible data without changing it. Removing the JAR first prevents both plugins from competing for /kit.
+3. Install DialogKits 1.2.5 and start the server. The importer reads the old folder and copies compatible data without changing it. Removing the JAR first prevents both plugins from competing for /kit.
 4. Verify plugins/DialogKits/kits/, previews, menu ordering, permission nodes, cooldowns, and imported claim-data mappings.
 5. Keep plugins/PlayerKits2/ as a backup until you are satisfied, then edit only DialogKits. The two config.yml files and kit folders remain separate.
 
@@ -53,4 +53,4 @@ The JAR is generated at target/DialogKits.jar.
 
 ## Command tab completion
 
-Version 1.2.4 provides tab completion for kit subcommands, kit names after `claim`, `preview`, `edit`, `replace`, and `delete`, online player names after `give`, and owner-only management commands. Typing `/kit ` suggests the available subcommands and direct kit names.
+Version 1.2.4 provides tab completion for kit subcommands, kit names after `claim`, `preview`, `edit`, `replace`, and `delete`, online player names after `give`, and owner-only management commands. Typing `/kit ` suggests the available subcommands and direct kit names. Running bare `/kit` opens the kit menu; `/kit help` shows the command list.

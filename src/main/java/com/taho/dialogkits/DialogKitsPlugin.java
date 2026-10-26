@@ -192,7 +192,12 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
     }
 
     private boolean handleKitCommand(CommandSender sender, String[] args) {
-        if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
+        if (args.length == 0) {
+            // Bare /kit should open the menu. Help is opt-in with /kit help.
+            return handleKitCommand(sender, new String[]{"open"});
+        }
+
+        if (args[0].equalsIgnoreCase("help")) {
             showKitHelp(sender);
             return true;
         }
