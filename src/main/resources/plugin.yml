@@ -6,6 +6,7 @@ description: Native Java dialogs for PlayerKits2, with Floodgate Bedrock fallbac
 author: Taho
 softdepend:
   - PlayerKits2
+  - peyajAuth
   - floodgate
 
 commands:
