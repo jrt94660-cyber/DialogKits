@@ -90,6 +90,19 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return true;
         }
 
+        if (args[0].equalsIgnoreCase("locked")) {
+            player.sendMessage(color(getConfig().getString(
+                    "messages.kit-locked",
+                    "&cLocked: you do not have permission to claim that kit."
+            )));
+            Bukkit.getScheduler().runTaskLater(this, () -> {
+                if (player.isOnline()) {
+                    openNativeKitDialog(player);
+                }
+            }, 1L);
+            return true;
+        }
+
         if (args[0].equalsIgnoreCase("preview")) {
             if (args.length < 2) {
                 player.sendMessage(color(getConfig().getString("messages.preview-usage", "&cUsage: /dialogkits preview <kit>")));
@@ -109,7 +122,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return true;
         }
 
-        player.sendMessage(color("&7Usage: &f/dialogkits [open|preview <kit>|reload]"));
+        player.sendMessage(color("&7Usage: &f/dialogkits [open|claim <kit>|preview <kit>|reload]"));
         return true;
     }
 
@@ -184,17 +197,22 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             }
             String displayName = getKitDisplayName(kit, kitId);
 
+            boolean locked = isKitLocked(player, kit);
             boolean claimed = hasClaimedKit(player, kit);
-            String claimLabel = getConfig().getString(
-                    claimed ? "ui.claimed-button" : "ui.ready-button",
-                    claimed ? "&c%kit% &8| &cClaimed" : "&a%kit% &8| &aReady"
-            );
+            String statusKey = locked ? "ui.locked-button" : claimed ? "ui.claimed-button" : "ui.ready-button";
+            String statusFallback = locked
+                    ? "&c%kit% &8| &cLocked"
+                    : claimed ? "&e%kit% &8| &eClaimed" : "&a%kit% &8| &aReady";
+            String statusLabel = getConfig().getString(statusKey, statusFallback);
+            String statusCommand = locked ? "/dialogkits locked " + kitId : "/dialogkits claim " + kitId;
+            String statusTooltip = locked
+                    ? "&cYou do not have permission to claim " + displayName + "."
+                    : claimed ? "&eYou have already claimed " + displayName + "."
+                    : "&aReady to claim " + displayName + ".";
             buttons.add(button(
-                    format(claimLabel, displayName, kitId),
-                    "/dialogkits claim " + kitId,
-                    color(claimed
-                            ? "&cYou have already claimed &f" + displayName + "&c."
-                            : "&aReady to claim &f" + displayName + "&a.")
+                    format(statusLabel, displayName, kitId),
+                    statusCommand,
+                    color(statusTooltip)
             ));
             buttons.add(button(
                     color(getConfig().getString("ui.preview-button", "&bPreview")),
@@ -294,13 +312,18 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         }
         body.add(DialogBody.plainMessage(color(itemText.toString()), 340));
 
+        boolean locked = isKitLocked(player, kit);
+        boolean claimed = hasClaimedKit(player, kit);
+        String statusKey = locked ? "ui.locked-button" : claimed ? "ui.claimed-button" : "ui.ready-button";
+        String statusFallback = locked
+                ? "&c%kit% &8| &cLocked"
+                : claimed ? "&e%kit% &8| &eClaimed" : "&a%kit% &8| &aReady";
         ActionButton claimButton = button(
-                format(getConfig().getString(
-                        hasClaimedKit(player, kit) ? "ui.claimed-button" : "ui.ready-button",
-                        hasClaimedKit(player, kit) ? "&c%kit% &8| &cClaimed" : "&a%kit% &8| &aReady"
-                ), displayName, kitId),
-                "/dialogkits claim " + kitId,
-                color("&7Claim this kit using PlayerKits2.")
+                format(getConfig().getString(statusKey, statusFallback), displayName, kitId),
+                locked ? "/dialogkits locked " + kitId : "/dialogkits claim " + kitId,
+                color(locked
+                        ? "&cYou do not have permission to claim this kit."
+                        : claimed ? "&eThis kit has already been claimed." : "&7Claim this kit using PlayerKits2.")
         );
         ActionButton backButton = button(
                 color(getConfig().getString("ui.preview-back-button", "&7Back to Kits")),
@@ -377,6 +400,11 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
         String key = claimedKey(player, kitId);
         return claimedData != null && claimedData.getBoolean(key, false);
+    }
+
+    private boolean isKitLocked(Player player, Object kit) {
+        Object permissionResult = invokeWithArguments(kit, "playerHasPermission", player);
+        return permissionResult instanceof Boolean allowed && !allowed;
     }
 
     private void markClaimed(Player player, Object kit) {
