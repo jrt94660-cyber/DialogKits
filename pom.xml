@@ -3,27 +3,22 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <groupId>com.taho</groupId>
     <artifactId>DialogKits</artifactId>
-    <version>1.1.1</version>
+    <version>1.2.0</version>
     <packaging>jar</packaging>
-
     <name>DialogKits</name>
-    <description>Native Java dialog menus for PlayerKits2 with Bedrock chest GUI fallback.</description>
-
+    <description>Standalone kit management with native Java dialogs, Bedrock GUI, and PlayerKits2 migration.</description>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>21</maven.compiler.release>
     </properties>
-
     <repositories>
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
     </repositories>
-
     <dependencies>
         <dependency>
             <groupId>io.papermc.paper</groupId>
@@ -32,16 +27,13 @@
             <scope>provided</scope>
         </dependency>
     </dependencies>
-
     <build>
         <finalName>DialogKits</finalName>
         <plugins>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.14.1</version>
-                <configuration>
-                    <release>21</release>
-                </configuration>
+                <configuration><release>21</release></configuration>
             </plugin>
         </plugins>
     </build>

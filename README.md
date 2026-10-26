@@ -1,52 +1,51 @@
 # DialogKits
 
-**Current version: 1.1.1**
+**Current version: 1.2.0 — standalone conversion**
 
-DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
+DialogKits is now an independent kit plugin. It no longer needs PlayerKits2 at runtime or imports its Java classes. Its first-start importer reads the existing PlayerKits2 folder, copies compatible kit YAML files, imports supported settings, uses the old inventory layout to seed manual menu ordering, and migrates matching cooldown/claim history when kit names can be mapped. The original PlayerKits2 files are never changed or deleted.
 
-## Features
+## Highlights
 
-- On Java Edition, running bare `/kit` (also `/kits` and `/playerkits`) opens a native dialog instead of PlayerKits2's main chest menu.
-- Every kit shows a green **Ready** button if the player can claim it.
-- Kits the player lacks permission to claim show a red **Locked** button; clicking it displays a permission message instead of attempting a claim.
-- Successfully claimed unlimited kits show **Claimed** in yellow. One-time and cooldown kits use PlayerKits2's stored claim state.
-- Successful claims through the dialog and intercepted PlayerKits2 claim commands refresh the status display.
-- Preview actions are clean text-only **Preview** buttons; no spyglass item is displayed in the dialog.
-- Native preview dialogs show the kit icon and a compact list of its item contents.
-- Claiming is delegated to PlayerKits2's kit manager, preserving its permission, cooldown, requirement, inventory, economy, and action checks.
-- Floodgate players retain the existing PlayerKits2 chest GUI.
-- Kit names and kit data are read from PlayerKits2 at runtime; no duplicate kit config is required.
-- The Java kit dialog displays only kits that an admin has explicitly assigned to a manual slot (1–50). Unassigned kits remain hidden until assigned a slot.
-- Ready, Claimed, and Locked button labels and dialog titles are configurable in `config.yml`.
-- The main `/kit` and `/kits` dialog shows the **Add Kit** button only to players whose LuckPerms primary group matches `admin.owner-group` (default: `owner`). It stays available after kits have been added and opens `/dialogkitsadmin edit`.
-- The kit-command listener exits immediately for every command except `/kit`, `/kits`, and `/playerkits`, to avoid inspecting or intercepting PeyajAuth login, registration, and other commands.
-- `/dialogkitsadmin edit` is checked against LuckPerms every time it is used; server operators who are not in the configured owner primary group cannot use it. If LuckPerms is unavailable or the player data cannot be read, access is denied.
+- Java players open a native Minecraft dialog using /kit, /kits, /playerkits, or /dialogkits.
+- Floodgate/Bedrock players use DialogKits' own chest GUI; left-click to claim and right-click to preview.
+- Independent plugins/DialogKits/kits/*.yml kit definitions and player-data.yml claim/cooldown storage.
+- Supports kit cooldowns, one-time kits, permission-gated kits, automatic armor placement, clear-inventory kits, inventory overflow/drop behavior, optional Vault economy prices, PlaceholderAPI expansion, simple extra requirements, claim/error actions, first-join kits, and player claim resets.
+- /kit create <name> creates a kit from the player's current inventory. /kit edit <name> opens a 54-slot item editor; changes save when the editor closes.
+- /kit give <kit> <player>, /kit delete <kit>, /kit reset <kit> <player>, /kit preview <kit>, /kit verify, and /kit reload.
+- The configured LuckPerms owner primary group (default: owner) can use /dialogkitsadmin edit to manually assign positions 1–50. The owner-only Add Kit button stays visible when the menu is empty.
+- Existing PlayerKits2 permission nodes playerkits.kit.<kit> are accepted alongside dialogkits.kit.<kit>.
+- Imported Bukkit/Paper item serialization is kept, preserving supported enchantments, item components, custom names, and lore.
 
-## Compatibility
+## Separate folders
 
-- Targets the Paper API for **Minecraft 1.21.11** and is intended for Paper **1.21.11 through 26.3**.
-- Build bytecode targets Java 21. Use the Java runtime required by the Paper version installed on your server.
-- Java clients must support native Minecraft dialogs (1.21.6+).
-- PlayerKits2 must be installed and enabled.
-- Floodgate is optional and detected automatically for Bedrock fallback.
+    plugins/
+    ├── PlayerKits2/             # left untouched as a backup
+    │   ├── config.yml
+    │   ├── inventory.yml
+    │   ├── kits/
+    │   └── players/
+    └── DialogKits/
+        ├── config.yml           # standalone DialogKits settings
+        ├── messages.yml         # standalone messages
+        ├── kits/                # independent copies of imported kit files
+        ├── kit-order.yml        # manual native-dialog positions
+        ├── player-data.yml      # standalone claims and cooldowns
+        └── migration.yml        # one-time import status
 
-## Commands
+## Migration
 
-- `/kit` — opens the native kit dialog for Java players.
-- `/dialogkits` or `/dialogkits open` — opens the dialog menu.
-- `/dialogkits claim <kit>` — claims via PlayerKits2 and refreshes the Ready/Claimed state.
-- `/dialogkits preview <kit>` — opens the native preview dialog.
-- `/dialogkits reload` — reloads DialogKits configuration (OP by default).
-- `/dialogkitsadmin edit` — for the configured LuckPerms owner group only. Opens a native admin dialog listing all PlayerKits2 kits. Select a kit, then choose Slot 1–50 to make it appear in that manual position. Manual positions are saved in `plugins/DialogKits/kit-order.yml`.
+1. Back up the server before changing kit plugins.
+2. Install DialogKits 1.2.0 while plugins/PlayerKits2/ is still present. DialogKits copies kit YAML files and supported settings on first start.
+3. Verify plugins/DialogKits/kits/, previews, menu ordering, permission nodes, cooldowns, and imported claim-data mappings.
+4. Disable/remove the PlayerKits2 JAR after verifying the migration. Keep its folder as a backup until satisfied.
+5. Edit only DialogKits from then on; its config and kit data are independent.
 
-Other PlayerKits2 administrative commands remain available.
+The importer uses explicit aliases for the uploaded server data, including StarterKit to Starter, BoosterKit to booster, OgKit to og, Taho+Kit to taho+, Taho++Kit to taho++, and ComedianKit to media. Claims that cannot be confidently mapped are skipped instead of assigned to a potentially wrong kit. Advanced third-party PlayerKits2 extensions and MySQL-specific storage are not imported by this initial standalone conversion; Vault, PlaceholderAPI, and Floodgate integrations are optional.
 
 ## Build
 
-Use Java 21 or newer with Maven:
+Requires Java 21+ and Maven:
 
-```sh
-mvn clean package
-```
+    mvn clean package
 
-The plugin jar is generated at `target/DialogKits.jar`.
+The JAR is generated at target/DialogKits.jar.

@@ -1,38 +1,54 @@
-# DialogKits bridges PlayerKits2 into Minecraft's native dialog UI for Java clients.
-# The PlayerKits2 chest GUI remains in place for Floodgate/Bedrock clients.
+# DialogKits is a standalone kit plugin. It does not require PlayerKits2.
+# On first start, it can safely COPY/import compatible PlayerKits2 data without modifying that folder.
+migration:
+  import-playerkits2-on-first-start: true
+  kit-name-aliases:
+    StarterKit: Starter
+    BoosterKit: booster
+    OgKit: og
+    Taho+Kit: taho+
+    Taho++Kit: taho++
+    ComedianKit: media
 
-intercept-kit-command: true
-bedrock-use-playerkits-gui: true
-
-# LuckPerms group allowed to use the native Add Kit/admin editor.
 admin:
   owner-group: "owner"
+
+# Optional first-join kit. Old "StarterKit" will be mapped to "Starter".
+first-join-kit: ""
+
+commands:
+  short-claim: false
+
+claim:
+  drop-items-if-full-inventory: false
+  close-menu-after-claim: false
+
+preview:
+  enabled: true
+  requires-permission: false
+
+bedrock:
+  enabled: true
+  title: "&8Player Kits"
+  preview-title: "&8Preview: %kit%"
+  filler: BLACK_STAINED_GLASS_PANE
+
+kits:
+  editor-title: "&8Edit Kit: %kit%"
+  new-kit-defaults:
+    cooldown: 3600
 
 ui:
   title: "&8Player Kits"
   add-kit-button: "&aAdd Kit"
-  empty-description: "&7No kits have been added yet. Click &aAdd Kit &7to set up the kit list."
+  empty-description: "&7No kits have been assigned yet. Click &aAdd Kit &7to manage the kit list."
   no-kits-for-player: "&7No kits are available yet."
   description: "&7Choose an action for each kit. Ready is green, Claimed is yellow, Locked is red."
   use-kit-display-name: true
-
-  # Kit button placeholders: %kit% (display name), %kit_id% (internal ID), %kit_name%.
   ready-button: "&a%kit% &8| &aReady"
   claimed-button: "&e%kit% &8| &eClaimed"
   locked-button: "&c%kit% &8| &cLocked"
   preview-button: "&bPreview"
-
   preview-title: "&8Preview &7» &f%kit%"
-  preview-claim-button: "&aClaim %kit%"
   preview-back-button: "&7Back to Kits"
-  preview-list-limit: 12
-
-messages:
-  no-permission: "&cYou do not have permission to do that."
-  kit-locked: "&cLocked: you do not have permission to claim that kit."
-  playerkits-missing: "&cPlayerKits2 is not installed or is not ready."
-  no-kits: "&7There are no kits configured in PlayerKits2."
-  kit-not-found: "&cThat kit does not exist in PlayerKits2."
-  preview-usage: "&cUsage: /dialogkits preview <kit>"
-  reloaded: "&aDialogKits configuration reloaded."
-  dialog-failed: "&cCould not open the native kit dialog. Check the server console for details."
+  preview-list-limit: 14
