@@ -814,11 +814,12 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             description += "\n&aCurrent position: " + currentSlot;
         }
 
+        String finalDescription = description;
         Dialog dialog = Dialog.create(builder -> builder.empty()
                 .base(DialogBase.builder(color("&8Edit Kit Position"))
                         .canCloseWithEscape(true)
                         .pause(false)
-                        .body(List.of(DialogBody.plainMessage(color(description), 380)))
+                        .body(List.of(DialogBody.plainMessage(color(finalDescription), 380)))
                         .build())
                 .type(DialogType.multiAction(buttons, null, 3))
         );
