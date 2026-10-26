@@ -1,6 +1,6 @@
 # DialogKits
 
-**Current version: 1.1.0**
+**Current version: 1.1.1**
 
 DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
 
@@ -19,6 +19,7 @@ DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.
 - The Java kit dialog displays only kits that an admin has explicitly assigned to a manual slot (1–50). Unassigned kits remain hidden until assigned a slot.
 - Ready, Claimed, and Locked button labels and dialog titles are configurable in `config.yml`.
 - The main `/kit` and `/kits` dialog shows the **Add Kit** button only to players whose LuckPerms primary group matches `admin.owner-group` (default: `owner`). It stays available after kits have been added and opens `/dialogkitsadmin edit`.
+- The kit-command listener exits immediately for every command except `/kit`, `/kits`, and `/playerkits`, to avoid inspecting or intercepting PeyajAuth login, registration, and other commands.
 - `/dialogkitsadmin edit` is checked against LuckPerms every time it is used; server operators who are not in the configured owner primary group cannot use it. If LuckPerms is unavailable or the player data cannot be read, access is denied.
 
 ## Compatibility
