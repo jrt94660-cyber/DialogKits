@@ -16,6 +16,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -26,6 +27,9 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,10 +40,13 @@ import java.util.UUID;
 
 public final class DialogKitsPlugin extends JavaPlugin implements Listener, CommandExecutor {
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
+    private File claimedDataFile;
+    private YamlConfiguration claimedData;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        loadClaimedData();
         PluginCommand command = getCommand("dialogkits");
         if (command != null) {
             command.setExecutor(this);
@@ -71,6 +78,15 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
                 return true;
             }
             openFor(player);
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("claim")) {
+            if (args.length < 2) {
+                player.sendMessage(color("&cUsage: /dialogkits claim <kit>"));
+                return true;
+            }
+            claimKit(player, args[1]);
             return true;
         }
 
@@ -107,18 +123,38 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return;
         }
 
-        String message = event.getMessage().trim();
-        if (!message.matches("(?i)^/(kit|kits|playerkits)$")) {
-            return;
-        }
-
         Player player = event.getPlayer();
         if (isBedrockPlayer(player) && getConfig().getBoolean("bedrock-use-playerkits-gui", true)) {
             return;
         }
 
-        event.setCancelled(true);
-        openNativeKitDialog(player);
+        String message = event.getMessage().trim();
+        if (message.matches("(?i)^/(kit|kits|playerkits)$")) {
+            event.setCancelled(true);
+            openNativeKitDialog(player);
+            return;
+        }
+
+        // Route ordinary claims through this plugin as well, so the Ready/Claimed
+        // indicator stays accurate even when a player uses PlayerKits2's command.
+        java.util.regex.Matcher explicitClaim = java.util.regex.Pattern
+                .compile("(?i)^/(kit|kits|playerkits)\\s+claim\\s+([^\\s]+)$")
+                .matcher(message);
+        if (explicitClaim.matches()) {
+            event.setCancelled(true);
+            claimKit(player, explicitClaim.group(2));
+            return;
+        }
+
+        if (isClaimShortCommandEnabled()) {
+            java.util.regex.Matcher shortClaim = java.util.regex.Pattern
+                    .compile("(?i)^/(kit|kits|playerkits)\\s+([^\\s]+)$")
+                    .matcher(message);
+            if (shortClaim.matches() && findKit(shortClaim.group(2)) != null) {
+                event.setCancelled(true);
+                claimKit(player, shortClaim.group(2));
+            }
+        }
     }
 
     private void openFor(Player player) {
@@ -148,13 +184,20 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             }
             String displayName = getKitDisplayName(kit, kitId);
 
+            boolean claimed = hasClaimedKit(player, kit);
+            String claimLabel = getConfig().getString(
+                    claimed ? "ui.claimed-button" : "ui.ready-button",
+                    claimed ? "&c%kit% &8| &cClaimed" : "&a%kit% &8| &aReady"
+            );
             buttons.add(button(
-                    format(getConfig().getString("ui.claim-button", "&a%kit% &8| &fClaim"), displayName, kitId),
-                    getClaimCommand(kitId),
-                    color("&7Claim the &f" + displayName + "&7 kit.")
+                    format(claimLabel, displayName, kitId),
+                    "/dialogkits claim " + kitId,
+                    color(claimed
+                            ? "&cYou have already claimed &f" + displayName + "&c."
+                            : "&aReady to claim &f" + displayName + "&a.")
             ));
             buttons.add(button(
-                    format(getConfig().getString("ui.preview-button", "&b%kit% &8| &fPreview"), displayName, kitId),
+                    color(getConfig().getString("ui.preview-button", "&bPreview")),
                     "/dialogkits preview " + kitId,
                     color("&7View the items in &f" + displayName + "&7.")
             ));
@@ -169,8 +212,17 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return;
         }
 
-        List<DialogBody> body = List.of(DialogBody.plainMessage(
-                color(getConfig().getString("ui.description", "&7Choose a kit action. Each kit has a Claim and Preview button.")),
+        List<DialogBody> body = new ArrayList<>();
+        body.add(DialogBody.item(
+                new ItemStack(Material.SPYGLASS),
+                DialogBody.plainMessage(color(getConfig().getString("ui.preview-icon-description", "&7Preview kits with the spyglass action.")), 240),
+                true,
+                true,
+                28,
+                28
+        ));
+        body.add(DialogBody.plainMessage(
+                color(getConfig().getString("ui.description", "&7Choose a kit action. Ready is green; claimed kits are red.")),
                 340
         ));
 
@@ -243,8 +295,11 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         body.add(DialogBody.plainMessage(color(itemText.toString()), 340));
 
         ActionButton claimButton = button(
-                format(getConfig().getString("ui.preview-claim-button", "&aClaim %kit%"), displayName, kitId),
-                getClaimCommand(kitId),
+                format(getConfig().getString(
+                        hasClaimedKit(player, kit) ? "ui.claimed-button" : "ui.ready-button",
+                        hasClaimedKit(player, kit) ? "&c%kit% &8| &cClaimed" : "&a%kit% &8| &aReady"
+                ), displayName, kitId),
+                "/dialogkits claim " + kitId,
                 color("&7Claim this kit using PlayerKits2.")
         );
         ActionButton backButton = button(
@@ -263,6 +318,256 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         );
 
         showDialogOrFallback(player, dialog);
+    }
+
+    private void loadClaimedData() {
+        if (!getDataFolder().exists() && !getDataFolder().mkdirs()) {
+            getLogger().warning("Could not create DialogKits data folder; claimed-state persistence may not work.");
+        }
+        claimedDataFile = new File(getDataFolder(), "claimed.yml");
+        if (!claimedDataFile.exists()) {
+            try {
+                if (!claimedDataFile.createNewFile()) {
+                    getLogger().warning("Could not create claimed.yml.");
+                }
+            } catch (IOException exception) {
+                getLogger().warning("Could not create claimed.yml: " + exception.getMessage());
+            }
+        }
+        claimedData = YamlConfiguration.loadConfiguration(claimedDataFile);
+    }
+
+    private void saveClaimedData() {
+        if (claimedData == null || claimedDataFile == null) {
+            return;
+        }
+        try {
+            claimedData.save(claimedDataFile);
+        } catch (IOException exception) {
+            getLogger().warning("Could not save claimed.yml: " + exception.getMessage());
+        }
+    }
+
+    private boolean hasClaimedKit(Player player, Object kit) {
+        String kitId = stringValue(invoke(kit, "getName"));
+        if (kitId == null) {
+            return false;
+        }
+
+        int cooldownSeconds = numberValue(invoke(kit, "getCooldown"));
+        boolean oneTime = Boolean.TRUE.equals(invoke(kit, "isOneTime"));
+        Plugin playerKits = getPlayerKitsPlugin();
+        Object dataManager = invoke(playerKits, "getPlayerDataManager");
+
+        if (oneTime) {
+            Object oneTimeClaimed = invokeWithArguments(dataManager, "isKitOneTime", player, kitId);
+            if (Boolean.TRUE.equals(oneTimeClaimed)) {
+                return true;
+            }
+        }
+
+        if (cooldownSeconds > 0) {
+            Object cooldown = invokeWithArguments(dataManager, "getKitCooldown", player, kitId);
+            if (cooldown instanceof Number number && number.longValue() > System.currentTimeMillis()) {
+                return true;
+            }
+            // Cooldown kits become Ready again once the PlayerKits2 cooldown expires.
+            return false;
+        }
+
+        String key = claimedKey(player, kitId);
+        return claimedData != null && claimedData.getBoolean(key, false);
+    }
+
+    private void markClaimed(Player player, Object kit) {
+        int cooldownSeconds = numberValue(invoke(kit, "getCooldown"));
+        boolean oneTime = Boolean.TRUE.equals(invoke(kit, "isOneTime"));
+        // PlayerKits2 owns one-time and cooldown state. DialogKits persists the
+        // claim marker for unlimited kits, which otherwise have no status to read.
+        if (!oneTime && cooldownSeconds <= 0 && claimedData != null) {
+            claimedData.set(claimedKey(player, stringValue(invoke(kit, "getName"))), true);
+            saveClaimedData();
+        }
+    }
+
+    private String claimedKey(Player player, String kitId) {
+        String encoded = java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(kitId.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return player.getUniqueId() + "." + encoded;
+    }
+
+    private void claimKit(Player player, String kitId) {
+        Plugin playerKits = getPlayerKitsPlugin();
+        Object kit = findKit(kitId);
+        if (playerKits == null || kit == null) {
+            player.sendMessage(color(getConfig().getString("messages.kit-not-found", "&cThat kit does not exist in PlayerKits2.")));
+            openNativeKitDialog(player);
+            return;
+        }
+
+        try {
+            ClassLoader loader = playerKits.getClass().getClassLoader();
+            Class<?> instructionsClass = Class.forName("pk.ajneb97.model.internal.GiveKitInstructions", true, loader);
+            Constructor<?> constructor = instructionsClass.getConstructor();
+            Object instructions = constructor.newInstance();
+            Object kitsManager = invoke(playerKits, "getKitsManager");
+            Method giveKit = null;
+            for (Method method : kitsManager.getClass().getMethods()) {
+                if (method.getName().equals("giveKit") && method.getParameterCount() == 3
+                        && method.getParameterTypes()[0].isAssignableFrom(player.getClass())
+                        && method.getParameterTypes()[1] == String.class
+                        && method.getParameterTypes()[2].isAssignableFrom(instructionsClass)) {
+                    giveKit = method;
+                    break;
+                }
+            }
+            if (giveKit == null) {
+                throw new NoSuchMethodException("PlayerKits2 KitsManager.giveKit");
+            }
+
+            Object result = giveKit.invoke(kitsManager, player, kitId, instructions);
+            if (Boolean.TRUE.equals(invoke(result, "isError"))) {
+                sendPlayerKitsMessage(player, stringValue(invoke(result, "getMessage")));
+                openNativeKitDialog(player);
+                return;
+            }
+
+            if (Boolean.TRUE.equals(invoke(result, "isProceedToBuy"))) {
+                openPlayerKitsPurchaseRequirements(player, kitId, playerKits);
+                return;
+            }
+
+            markClaimed(player, kit);
+            sendKitReceivedMessage(player, kitId, playerKits);
+            Bukkit.getScheduler().runTaskLater(this, () -> {
+                if (player.isOnline()) {
+                    openNativeKitDialog(player);
+                }
+            }, 1L);
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            getLogger().warning("Could not call PlayerKits2 claim API for kit '" + kitId + "': " + exception.getMessage());
+            player.sendMessage(color("&cCould not claim that kit through the integration. Trying PlayerKits2's command instead."));
+            player.performCommand(isClaimShortCommandEnabled() ? "kit " + kitId : "kit claim " + kitId);
+            Bukkit.getScheduler().runTaskLater(this, () -> {
+                if (player.isOnline()) {
+                    openNativeKitDialog(player);
+                }
+            }, 1L);
+        }
+    }
+
+    private void sendPlayerKitsMessage(Player player, String message) {
+        if (message == null || message.isBlank()) {
+            return;
+        }
+        Object messagesManager = invoke(getPlayerKitsPlugin(), "getMessagesManager");
+        if (!invokeCompatible(messagesManager, "sendMessage", player, message, true)) {
+            player.sendMessage(color(message));
+        }
+    }
+
+    private void sendKitReceivedMessage(Player player, String kitId, Plugin playerKits) {
+        Object configs = invoke(playerKits, "getConfigsManager");
+        Object messagesConfigManager = invoke(configs, "getMessagesConfigManager");
+        Object messagesConfig = invoke(messagesConfigManager, "getConfig");
+        String template = stringValue(invokeWithArgument(messagesConfig, "getString", "kitReceived"));
+        if (template == null) {
+            template = "&aKit &f%kit% &aclaimed.";
+        }
+        String message = template.replace("%kit%", kitId);
+        Object messagesManager = invoke(playerKits, "getMessagesManager");
+        if (!invokeCompatible(messagesManager, "sendMessage", player, message, true)) {
+            player.sendMessage(color(message));
+        }
+    }
+
+    private void openPlayerKitsPurchaseRequirements(Player player, String kitId, Plugin playerKits) {
+        try {
+            ClassLoader loader = playerKits.getClass().getClassLoader();
+            Class<?> inventoryPlayerClass = Class.forName("pk.ajneb97.model.inventory.InventoryPlayer", true, loader);
+            Object inventoryPlayer = inventoryPlayerClass.getConstructor(Player.class, String.class)
+                    .newInstance(player, "buy_requirements_inventory");
+            invokeWithArgument(inventoryPlayer, "setKitName", kitId);
+            invokeWithArgument(inventoryPlayer, "setPreviousInventoryName", "main_inventory");
+            Object inventoryManager = invoke(playerKits, "getInventoryManager");
+            if (!invokeCompatible(inventoryManager, "openInventory", inventoryPlayer)) {
+                throw new NoSuchMethodException("PlayerKits2 InventoryManager.openInventory");
+            }
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            getLogger().warning("Could not open PlayerKits2 requirement purchase screen: " + exception.getMessage());
+            player.sendMessage(color("&cThis kit has purchase requirements; please use PlayerKits2's /kit preview or GUI to complete them."));
+            openNativeKitDialog(player);
+        }
+    }
+
+    private boolean invokeCompatible(Object target, String methodName, Object... arguments) {
+        if (target == null) {
+            return false;
+        }
+        for (Method method : target.getClass().getMethods()) {
+            if (!method.getName().equals(methodName) || method.getParameterCount() != arguments.length) {
+                continue;
+            }
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            boolean compatible = true;
+            for (int i = 0; i < parameterTypes.length; i++) {
+                Object argument = arguments[i];
+                if (argument == null) {
+                    continue;
+                }
+                Class<?> parameter = parameterTypes[i];
+                if (parameter.isPrimitive()) {
+                    compatible &= (parameter == boolean.class && argument instanceof Boolean)
+                            || (parameter == int.class && argument instanceof Integer)
+                            || (parameter == long.class && argument instanceof Long)
+                            || (parameter == double.class && argument instanceof Double);
+                } else {
+                    compatible &= parameter.isAssignableFrom(argument.getClass());
+                }
+            }
+            if (!compatible) {
+                continue;
+            }
+            try {
+                method.invoke(target, arguments);
+                return true;
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private Object invokeWithArguments(Object target, String methodName, Object... arguments) {
+        if (target == null) {
+            return null;
+        }
+        for (Method method : target.getClass().getMethods()) {
+            if (!method.getName().equals(methodName) || method.getParameterCount() != arguments.length) {
+                continue;
+            }
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            boolean compatible = true;
+            for (int i = 0; i < parameterTypes.length; i++) {
+                if (arguments[i] != null && !parameterTypes[i].isAssignableFrom(arguments[i].getClass())) {
+                    compatible = false;
+                    break;
+                }
+            }
+            if (!compatible) {
+                continue;
+            }
+            try {
+                return method.invoke(target, arguments);
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private int numberValue(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
     }
 
     private void showNotice(Player player, String title, String message) {
@@ -319,11 +624,6 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             }
         }
         return titleCase(kitId);
-    }
-
-    private String getClaimCommand(String kitId) {
-        boolean shortCommand = isClaimShortCommandEnabled();
-        return shortCommand ? "/kit " + kitId : "/kit claim " + kitId;
     }
 
     private boolean isClaimShortCommandEnabled() {
