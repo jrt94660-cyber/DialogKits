@@ -153,6 +153,14 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
         }
 
         String message = event.getMessage().trim();
+
+        // This listener must never inspect or touch unrelated commands. In
+        // particular, return immediately for PeyajAuth's /login, /register,
+        // /2fa, and other commands so their native dialog flow is unaffected.
+        if (!message.matches("(?i)^/(kit|kits|playerkits)(?:\\s+.*)?$")) {
+            return;
+        }
+
         if (message.matches("(?i)^/(kit|kits|playerkits)$")) {
             event.setCancelled(true);
             openNativeKitDialog(player);
