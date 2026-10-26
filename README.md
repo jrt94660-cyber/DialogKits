@@ -1,5 +1,7 @@
 # DialogKits
 
+**Current version: 1.0.1**
+
 DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
 
 ## Features
