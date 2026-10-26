@@ -1,6 +1,6 @@
 # DialogKits
 
-**Current version: 1.0.5**
+**Current version: 1.0.6**
 
 DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
 
@@ -16,7 +16,9 @@ DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.
 - Claiming is delegated to PlayerKits2's kit manager, preserving its permission, cooldown, requirement, inventory, economy, and action checks.
 - Floodgate players retain the existing PlayerKits2 chest GUI.
 - Kit names and kit data are read from PlayerKits2 at runtime; no duplicate kit config is required.
+- When LuckPerms is installed, the Java kit dialog sorts rank kits by their LuckPerms group weight: lower weights appear first, and higher weights appear farther down. Kits are matched by group name first, then by the kit permission assigned directly to a weighted group. Unmatched kits stay after ranked kits by default.
 - Ready, Claimed, and Locked button labels and dialog titles are configurable in `config.yml`.
+- LuckPerms rank ordering can be controlled through `rank-order.enabled` and `rank-order.unmatched-kits-last` in `config.yml`.
 
 ## Compatibility
 
