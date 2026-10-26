@@ -1,0 +1,27 @@
+# DialogKits bridges PlayerKits2 into Minecraft's native dialog UI for Java clients.
+# The PlayerKits2 chest GUI remains in place for Floodgate/Bedrock clients.
+
+intercept-kit-command: true
+bedrock-use-playerkits-gui: true
+
+ui:
+  title: "&8Player Kits"
+  description: "&7Choose a kit action. Each kit has a Claim and Preview button."
+  use-kit-display-name: true
+
+  # Available placeholders: %kit% (display name), %kit_id% (PlayerKits2 internal ID), %kit_name%
+  claim-button: "&a%kit% &8| &fClaim"
+  preview-button: "&b%kit% &8| &fPreview"
+
+  preview-title: "&8Preview &7» &f%kit%"
+  preview-claim-button: "&aClaim %kit%"
+  preview-back-button: "&7Back to Kits"
+  preview-list-limit: 12
+
+messages:
+  no-permission: "&cYou do not have permission to do that."
+  playerkits-missing: "&cPlayerKits2 is not installed or is not ready."
+  no-kits: "&7There are no kits configured in PlayerKits2."
+  kit-not-found: "&cThat kit does not exist in PlayerKits2."
+  preview-usage: "&cUsage: /dialogkits preview <kit>"
+  reloaded: "&aDialogKits configuration reloaded."
