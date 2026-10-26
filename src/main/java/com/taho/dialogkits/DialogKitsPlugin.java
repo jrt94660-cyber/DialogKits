@@ -124,7 +124,12 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
     }
 
     private boolean handleKitCommand(CommandSender sender, String[] args) {
-        if (args.length == 0 || args[0].equalsIgnoreCase("open")) {
+        if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
+            showKitHelp(sender);
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("open")) {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("Only players can open the kit menu.");
                 return true;
@@ -303,6 +308,27 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
 
         sender.sendMessage(colored("&7Kit commands: &f/kit, /kit claim <kit>, /kit preview <kit>, /kit create <name>, /kit edit <name>, /kit delete <name>, /kit give <kit> <player>, /kit reset <kit> <player>, /kit reload"));
         return true;
+    }
+
+    private void showKitHelp(CommandSender sender) {
+        sender.sendMessage(colored("&8&m---------------- &bDialogKits Commands &8&m----------------"));
+        sender.sendMessage(colored("&b/kit open &7- Open the kit menu"));
+        sender.sendMessage(colored("&b/kit help &7- Show this command list"));
+        sender.sendMessage(colored("&b/kit claim <kit> &7- Claim a kit"));
+        sender.sendMessage(colored("&b/kit preview <kit> &7- Preview a kit"));
+        sender.sendMessage(colored("&b/kit reload &7- Reload DialogKits settings, messages, and kits"));
+
+        if (sender instanceof Player player && isOwnerRank(player)) {
+            sender.sendMessage(colored("&8&m---------------- &eOwner Commands &8&m----------------"));
+            sender.sendMessage(colored("&b/kit create <name> &7- Create a kit from your inventory"));
+            sender.sendMessage(colored("&b/kit edit <name> &7- Edit a kit's item contents"));
+            sender.sendMessage(colored("&b/kit delete <name> &7- Delete a kit"));
+            sender.sendMessage(colored("&b/kit give <kit> <player> &7- Give a kit to a player"));
+            sender.sendMessage(colored("&b/kit reset <kit> <player> &7- Reset a player's claim/cooldown"));
+            sender.sendMessage(colored("&b/kit verify &7- Check kit item files"));
+            sender.sendMessage(colored("&b/dialogkitsadmin edit &7- Set the kit dialog positions"));
+        }
+        sender.sendMessage(colored("&7You can also open the menu with &f/dialogkits"));
     }
 
     private void openFor(Player player) {
