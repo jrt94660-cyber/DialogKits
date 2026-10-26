@@ -1,6 +1,6 @@
 # DialogKits
 
-**Current version: 1.0.4**
+**Current version: 1.0.5**
 
 DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.com/Ajneb97/PlayerKits2).
 
@@ -11,7 +11,7 @@ DialogKits adds native Minecraft dialog screens to [PlayerKits2](https://github.
 - Kits the player lacks permission to claim show a red **Locked** button; clicking it displays a permission message instead of attempting a claim.
 - Successfully claimed unlimited kits show **Claimed** in yellow. One-time and cooldown kits use PlayerKits2's stored claim state.
 - Successful claims through the dialog and intercepted PlayerKits2 claim commands refresh the status display.
-- The dialog menu displays a real Minecraft Spyglass item alongside the Preview action.
+- Preview actions are clean text-only **Preview** buttons; no spyglass item is displayed in the dialog.
 - Native preview dialogs show the kit icon and a compact list of its item contents.
 - Claiming is delegated to PlayerKits2's kit manager, preserving its permission, cooldown, requirement, inventory, economy, and action checks.
 - Floodgate players retain the existing PlayerKits2 chest GUI.
