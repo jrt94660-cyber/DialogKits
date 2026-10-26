@@ -259,25 +259,17 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return true;
         }
 
-        if (sub.equals("reset")) {
+        if (sub.equals("replace")) {
             if (!(sender instanceof Player player)) {
-                sender.sendMessage("Usage: /kit reset <kit> <player>");
+                sender.sendMessage("Only a player can replace kit contents from their inventory.");
                 return true;
             }
             if (!requireOwner(player)) return true;
-            if (args.length < 3) {
-                player.sendMessage(colored("&cUsage: /kit reset <kit> <player>"));
+            if (args.length < 2) {
+                player.sendMessage(colored("&cUsage: /kit replace <kit>"));
                 return true;
             }
-            Player target = Bukkit.getPlayerExact(args[2]);
-            KitDefinition kit = findKit(args[1]);
-            if (target == null || kit == null) {
-                player.sendMessage(colored("&cThat kit or player could not be found."));
-                return true;
-            }
-            playerData.set(playerKitPath(target.getUniqueId(), kit.name), null);
-            savePlayerData();
-            tell(player, "kit-reset", "&aReset &f%kit% &afor &f%player%&a.", "%kit%", kit.name, "%player%", target.getName());
+            replaceKitFromInventory(player, args[1]);
             return true;
         }
 
@@ -306,7 +298,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             return true;
         }
 
-        sender.sendMessage(colored("&7Kit commands: &f/kit, /kit claim <kit>, /kit preview <kit>, /kit create <name>, /kit edit <name>, /kit delete <name>, /kit give <kit> <player>, /kit reset <kit> <player>, /kit reload"));
+        sender.sendMessage(colored("&7Kit commands: &f/kit help, /kit open, /kit claim <kit>, /kit preview <kit>, /kit create <name>, /kit edit <name>, /kit replace <kit>, /kit delete <kit>, /kit give <kit> <player>, /kit reload"));
         return true;
     }
 
@@ -324,7 +316,7 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             sender.sendMessage(colored("&b/kit edit <name> &7- Edit a kit's item contents"));
             sender.sendMessage(colored("&b/kit delete <name> &7- Delete a kit"));
             sender.sendMessage(colored("&b/kit give <kit> <player> &7- Give a kit to a player"));
-            sender.sendMessage(colored("&b/kit reset <kit> <player> &7- Reset a player's claim/cooldown"));
+            sender.sendMessage(colored("&b/kit replace <kit> &7- Replace kit items with your inventory, armor, and off-hand"));
             sender.sendMessage(colored("&b/kit verify &7- Check kit item files"));
             sender.sendMessage(colored("&b/dialogkitsadmin edit &7- Set the kit dialog positions"));
         }
@@ -627,6 +619,39 @@ public final class DialogKitsPlugin extends JavaPlugin implements Listener, Comm
             tell(player, "kit-added-to-menu", "&aKit &f%kit% &ahas been placed in menu slot &f%slot%&a.",
                     "%kit%", name, "%slot%", String.valueOf(getAssignedSlot(name)));
         }
+    }
+
+    private void replaceKitFromInventory(Player player, String rawKitName) {
+        KitDefinition kit = findKit(resolveKitName(rawKitName));
+        if (kit == null) {
+            tell(player, "kit-not-found", "&cKit &f%kit% &cdoes not exist.", "%kit%", rawKitName);
+            return;
+        }
+
+        // Capture storage slots, equipped armor, and off-hand separately so all
+        // currently held kit items are saved with their full ItemStack metadata.
+        List<ItemStack> contents = new ArrayList<>();
+        PlayerInventory inventory = player.getInventory();
+        for (ItemStack item : inventory.getStorageContents()) {
+            if (item != null && !item.getType().isAir()) contents.add(item.clone());
+        }
+        for (ItemStack item : inventory.getArmorContents()) {
+            if (item != null && !item.getType().isAir()) contents.add(item.clone());
+        }
+        ItemStack offHand = inventory.getItemInOffHand();
+        if (offHand != null && !offHand.getType().isAir()) contents.add(offHand.clone());
+
+        if (contents.isEmpty()) {
+            tell(player, "inventory-empty", "&cYour inventory, armor, and off-hand are empty; the kit was not changed.");
+            return;
+        }
+
+        // saveKitItems replaces only the item list. Cooldowns, permission rules,
+        // display icon/name, prices, requirements, and actions remain unchanged.
+        saveKitItems(kit, contents);
+        tell(player, "kit-replaced",
+                "&aKit &f%kit% &aitems replaced with your current inventory, armor, and off-hand.",
+                "%kit%", kit.name);
     }
 
     private void openKitEditor(Player player, String kitName) {
